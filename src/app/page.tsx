@@ -55,9 +55,9 @@ function BackgroundAtoms({ isFocusMode }: { isFocusMode: boolean }) {
 
 function ParticleSphere({ volume, isFocusMode, isProcessing }: { volume: number; isFocusMode: boolean; isProcessing: boolean }) {
   // We use 3 layers of particles with different sizes
-  const layer1 = useMemo(() => createSpherePoints(20000, 3.5), []);
-  const layer2 = useMemo(() => createSpherePoints(8000, 3.2), []);
-  const layer3 = useMemo(() => createSpherePoints(2000, 2.8), []);
+  const layer1 = useMemo(() => createSpherePoints(6000, 3.5), []);
+  const layer2 = useMemo(() => createSpherePoints(2500, 3.2), []);
+  const layer3 = useMemo(() => createSpherePoints(800, 2.8), []);
 
   function createSpherePoints(count: number, baseRadius: number) {
     const p = new Float32Array(count * 3);
@@ -264,8 +264,8 @@ export default function FridayHUD() {
     <div className="relative w-screen h-screen overflow-hidden bg-black font-mono text-xs selection:bg-cyan-500/30">
         
       {/* ── 3D Canvas Background ── */}
-      <div className="absolute inset-0 z-0 w-full h-full">
-        <Canvas camera={{ position: [0, 0, 10], fov: 75 }} gl={{ antialias: true, alpha: false }} style={{ width: '100%', height: '100%' }}>
+      <div className="absolute inset-0 z-0" style={{ width: '100vw', height: '100vh', display: 'block' }}>
+        <Canvas camera={{ position: [0, 0, 10], fov: 75 }} gl={{ antialias: true, alpha: false, pixelRatio: typeof window !== 'undefined' ? Math.min(window.devicePixelRatio, 2) : 1 }} style={{ width: '100vw', height: '100vh' }}>
           <color attach="background" args={["#000000"]} />
           <BackgroundAtoms isFocusMode={isFocusMode} />
           <ParticleSphere volume={speech.volume} isFocusMode={isFocusMode} isProcessing={isLoading || speech.state === "processing"} />
