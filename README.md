@@ -1,0 +1,2 @@
+# sexta-feira
+IA Autonoma
