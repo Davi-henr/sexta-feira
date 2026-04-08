@@ -137,10 +137,9 @@ async function executeTool(
         return result; 
       }
       case "demonstrate_virtual_folders": {
-        // Runs the compiled C# script that literally spans folders on desktop
-        // and launches windows floating physically around the user's screen in 60fps!
-        exec("OrbitFolders.exe", { cwd: process.cwd() });
-        return { action: "spawn_3d_folders", ui_triggered: true, count: 10, folders_created: "Pastas reais orbitando fisicamente a tela do Senhor" };
+        // Runs the compiled C# script that literally moves ICON POSITIONS on the desktop!
+        exec("OrbitIcons.exe", { cwd: process.cwd() });
+        return { action: "spawn_3d_folders", ui_triggered: true, count: 10, folders_created: "Ícones físicos rotacionando organicamente na Área de Trabalho com Sucesso!" };
       }
       case "get_current_time": {
         const now = new Date();
