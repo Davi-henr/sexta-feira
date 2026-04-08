@@ -1,0 +1,169 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ── Google Fonts loaded via layout.tsx ── */
+
+:root {
+  --midnight: #050810;
+  --grid-line: #0d1425;
+  --cyan-glow: #00f0ff;
+  --cyan-dim: #00a8b5;
+  --cyan-subtle: #003d42;
+  --amber-alert: #ffb300;
+  --text-primary: #e8f4f8;
+  --text-secondary: #6b8ea8;
+  --border-subtle: rgba(0, 240, 255, 0.12);
+  --border-active: rgba(0, 240, 255, 0.45);
+  --glow-sm: 0 0 8px rgba(0, 240, 255, 0.4);
+  --glow-md: 0 0 20px rgba(0, 240, 255, 0.3), 0 0 40px rgba(0, 240, 255, 0.1);
+  --glow-lg: 0 0 30px rgba(0, 240, 255, 0.5), 0 0 80px rgba(0, 240, 255, 0.15);
+}
+
+/* ── Base ─────────────────────────────────────────────────────────────────── */
+
+* { box-sizing: border-box; }
+
+html, body {
+  height: 100%;
+  overflow: hidden;
+  background-color: var(--midnight);
+  color: var(--text-primary);
+}
+
+/* ── Scrollbar ────────────────────────────────────────────────────────────── */
+
+::-webkit-scrollbar { width: 4px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--cyan-subtle); border-radius: 2px; }
+::-webkit-scrollbar-thumb:hover { background: var(--cyan-dim); }
+
+/* ── Typography ───────────────────────────────────────────────────────────── */
+
+.font-display { font-family: 'Exo 2', sans-serif; }
+.font-mono    { font-family: 'Share Tech Mono', monospace; }
+.font-body    { font-family: 'DM Sans', sans-serif; }
+
+/* ── HUD Grid Background ──────────────────────────────────────────────────── */
+
+.hud-grid {
+  background-image:
+    linear-gradient(rgba(0, 240, 255, 0.03) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(0, 240, 255, 0.03) 1px, transparent 1px);
+  background-size: 40px 40px;
+}
+
+/* ── Corner Brackets ──────────────────────────────────────────────────────── */
+
+.corner-bracket {
+  position: relative;
+}
+.corner-bracket::before,
+.corner-bracket::after {
+  content: '';
+  position: absolute;
+  width: 14px;
+  height: 14px;
+  border-color: var(--cyan-glow);
+  border-style: solid;
+  opacity: 0.6;
+}
+.corner-bracket::before {
+  top: 0; left: 0;
+  border-width: 1px 0 0 1px;
+}
+.corner-bracket::after {
+  bottom: 0; right: 0;
+  border-width: 0 1px 1px 0;
+}
+
+/* ── Glow Effects ─────────────────────────────────────────────────────────── */
+
+.glow-sm  { box-shadow: var(--glow-sm); }
+.glow-md  { box-shadow: var(--glow-md); }
+.glow-text { text-shadow: 0 0 10px rgba(0, 240, 255, 0.7); }
+
+/* ── Scan Line Animation ──────────────────────────────────────────────────── */
+
+@keyframes scanLine {
+  0%   { transform: translateY(-4px); opacity: 0; }
+  10%  { opacity: 1; }
+  90%  { opacity: 1; }
+  100% { transform: translateY(100vh); opacity: 0; }
+}
+
+.scan-line {
+  pointer-events: none;
+  position: fixed;
+  top: 0; left: 0; right: 0;
+  height: 3px;
+  background: linear-gradient(90deg, transparent, var(--cyan-glow), transparent);
+  animation: scanLine 6s linear infinite;
+  z-index: 50;
+  opacity: 0.3;
+}
+
+/* ── Pulsing Orb ──────────────────────────────────────────────────────────── */
+
+@keyframes orbPulse {
+  0%, 100% {
+    box-shadow: 0 0 20px var(--cyan-glow), 0 0 60px rgba(0,240,255,0.2), 0 0 100px rgba(0,240,255,0.05);
+    transform: scale(1);
+  }
+  50% {
+    box-shadow: 0 0 40px var(--cyan-glow), 0 0 100px rgba(0,240,255,0.4), 0 0 150px rgba(0,240,255,0.1);
+    transform: scale(1.04);
+  }
+}
+
+@keyframes orbListening {
+  0%, 100% { transform: scale(1); box-shadow: 0 0 30px #ff4444, 0 0 80px rgba(255,68,68,0.3); }
+  50%       { transform: scale(1.08); box-shadow: 0 0 50px #ff4444, 0 0 120px rgba(255,68,68,0.4); }
+}
+
+@keyframes orbSpeaking {
+  0%, 100% { transform: scale(1); }
+  25%       { transform: scale(1.06); }
+  75%       { transform: scale(0.97); }
+}
+
+.orb-idle      { animation: orbPulse 3s ease-in-out infinite; }
+.orb-listening { animation: orbListening 0.8s ease-in-out infinite; }
+.orb-speaking  { animation: orbSpeaking 0.5s ease-in-out infinite; }
+.orb-processing { animation: orbPulse 0.6s ease-in-out infinite; }
+
+/* ── Ring Rotations ───────────────────────────────────────────────────────── */
+
+@keyframes ringRotate  { from { transform: rotate(0deg); }   to { transform: rotate(360deg); } }
+@keyframes ringCounter { from { transform: rotate(0deg); }   to { transform: rotate(-360deg); } }
+
+.ring-outer { animation: ringRotate 12s linear infinite; }
+.ring-inner { animation: ringCounter 8s linear infinite; }
+.ring-fast  { animation: ringRotate 4s linear infinite; }
+
+/* ── Message Animation ────────────────────────────────────────────────────── */
+
+@keyframes fadeUp {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+.msg-enter { animation: fadeUp 0.35s ease-out forwards; }
+
+/* ── Alert Flash ──────────────────────────────────────────────────────────── */
+
+@keyframes alertFlash {
+  0%, 100% { border-color: var(--amber-alert); box-shadow: 0 0 10px rgba(255,179,0,0.3); }
+  50%       { border-color: rgba(255,179,0,0.4); box-shadow: 0 0 20px rgba(255,179,0,0.5); }
+}
+
+.alert-flash { animation: alertFlash 1.5s ease-in-out infinite; }
+
+/* ── Waveform Bars ────────────────────────────────────────────────────────── */
+
+@keyframes wave {
+  0%, 100% { transform: scaleY(0.3); }
+  50%       { transform: scaleY(1); }
+}
+
+.wave-bar { animation: wave var(--delay, 0.5s) ease-in-out infinite; }
