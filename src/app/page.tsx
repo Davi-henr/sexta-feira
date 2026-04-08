@@ -3,11 +3,10 @@
 import { useCallback, useEffect, useRef, useState, useMemo } from "react";
 import { Canvas, useFrame } from "@react-three/fiber";
 import { Points, PointMaterial } from "@react-three/drei";
-import { EffectComposer, Bloom } from "@react-three/postprocessing";
+import * as THREE from "three";
 import { useSpeech } from "@/hooks/useSpeech";
 import { useProactive } from "@/hooks/useProactive";
 import { useAlerts } from "@/hooks/useAlerts";
-import type { DBAlert } from "@/lib/supabase";
 import { motion, AnimatePresence } from "framer-motion";
 
 // ── Background Parallax Atoms ──────────────────────────────────────────────────
@@ -42,10 +41,11 @@ function BackgroundAtoms({ isFocusMode }: { isFocusMode: boolean }) {
       <PointMaterial 
         transparent 
         color={isFocusMode ? "#ff4d4d" : "#4da6ff"} 
-        size={0.08} 
-        opacity={0.3} 
+        size={0.15} 
+        opacity={0.4} 
         depthWrite={false} 
         sizeAttenuation={true} 
+        blending={THREE.AdditiveBlending}
       />
     </Points>
   );
@@ -54,7 +54,7 @@ function BackgroundAtoms({ isFocusMode }: { isFocusMode: boolean }) {
 // ── 3D Multi-layered Explosive Sphere ─────────────────────────────────────────
 
 function ParticleSphere({ volume, isFocusMode, isProcessing }: { volume: number; isFocusMode: boolean; isProcessing: boolean }) {
-  // We use 3 layers of particles with different sizes
+  // Drastically reduced count to save GPU, but AdditiveBlending makes them perfectly bright
   const layer1 = useMemo(() => createSpherePoints(6000, 3.5), []);
   const layer2 = useMemo(() => createSpherePoints(2500, 3.2), []);
   const layer3 = useMemo(() => createSpherePoints(800, 2.8), []);
@@ -62,7 +62,6 @@ function ParticleSphere({ volume, isFocusMode, isProcessing }: { volume: number;
   function createSpherePoints(count: number, baseRadius: number) {
     const p = new Float32Array(count * 3);
     for (let i = 0; i < count; i++) {
-        // More chaos when radius is lower
         const r = baseRadius + (Math.random() * 0.8); 
         const theta = 2 * Math.PI * Math.random();
         const phi = Math.acos(2 * Math.random() - 1);
@@ -78,12 +77,11 @@ function ParticleSphere({ volume, isFocusMode, isProcessing }: { volume: number;
   useFrame((state, delta) => {
     if (!groupRef.current) return;
     
-    // Base rotation
     groupRef.current.rotation.x -= delta / (isProcessing ? 2 : 4);
     groupRef.current.rotation.y -= delta / (isProcessing ? 3 : 6);
     
-    // Explosion Effect: Scale jumps extremely aggressively with volume
-    const explosiveVol = Math.pow(volume, 2.0) * 8; // Massive nonlinear amplification
+    // Explosion Effect
+    const explosiveVol = Math.pow(volume, 2.0) * 8; 
     const targetScale = 1.0 + explosiveVol + (isProcessing ? 0.5 : 0);
     
     const currentScale = groupRef.current.scale.x;
@@ -92,7 +90,7 @@ function ParticleSphere({ volume, isFocusMode, isProcessing }: { volume: number;
     const newScale = currentScale + (targetScale - currentScale) * lerpSpeed;
     groupRef.current.scale.set(newScale, newScale, newScale);
     
-    // Core interaction with mouse pointer
+    // Smooth Mouse Tracking
     const targetX = state.mouse.x * 2;
     const targetY = state.mouse.y * 2;
     groupRef.current.position.x += (targetX - groupRef.current.position.x) * 0.1;
@@ -104,38 +102,36 @@ function ParticleSphere({ volume, isFocusMode, isProcessing }: { volume: number;
 
   return (
     <group ref={groupRef} rotation={[0, 0, Math.PI / 6]}>
+      {/* Additive blending makes overlapping points literally glow like stars (No PostProcessing required) */}
       <Points positions={layer1} stride={3} frustumCulled={false}>
-        <PointMaterial transparent color={baseColor} size={0.015} opacity={0.6} depthWrite={false} sizeAttenuation={true}/>
+        <PointMaterial transparent color={baseColor} size={0.03} opacity={0.6} depthWrite={false} sizeAttenuation={true} blending={THREE.AdditiveBlending}/>
       </Points>
       <Points positions={layer2} stride={3} frustumCulled={false}>
-        <PointMaterial transparent color={baseColor} size={0.04} opacity={0.8} depthWrite={false} sizeAttenuation={true}/>
+        <PointMaterial transparent color={baseColor} size={0.06} opacity={0.8} depthWrite={false} sizeAttenuation={true} blending={THREE.AdditiveBlending}/>
       </Points>
       <Points positions={layer3} stride={3} frustumCulled={false}>
-        <PointMaterial transparent color={coreColor} size={0.09} opacity={1.0} depthWrite={false} sizeAttenuation={true}/>
+        <PointMaterial transparent color={coreColor} size={0.12} opacity={1.0} depthWrite={false} sizeAttenuation={true} blending={THREE.AdditiveBlending}/>
       </Points>
     </group>
   );
 }
 
-// ── Types & Interfaces ────────────────────────────────────────────────────────
-
+// ── Types ───────────────────────────────────────────────────────────────────
 interface PanelData {
   id: string;
-  type: "image" | "text" | "alert";
+  type: "image" | "alert";
   content?: string;
   url?: string;
   title?: string;
 }
 
 // ── Main Page ─────────────────────────────────────────────────────────────────
-
 export default function FridayHUD() {
   const [conversationId, setConversationId] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [micEnabled, setMicEnabled] = useState(false);
   const [timeStr, setTimeStr] = useState<string>("");
   
-  // UI State
   const [isFocusMode, setIsFocusMode] = useState(false);
   const [panels, setPanels] = useState<PanelData[]>([]);
   const [lastSpeech, setLastSpeech] = useState<{role: "user"|"assistant", text: string} | null>(null);
@@ -148,7 +144,6 @@ export default function FridayHUD() {
     return () => clearInterval(iv);
   }, []);
 
-  // ── Send message ────────────────────────────────────────────────────────
   const sendMessage = useCallback(
     async (text: string, opts?: { isProactive?: boolean }) => {
       if (!text.trim() || isLoading) return;
@@ -183,7 +178,7 @@ export default function FridayHUD() {
                 if (action.name === "web_search" && action.data?.images?.length > 0) {
                     const newPanels = action.data.images.map((url: string) => ({
                         id: crypto.randomUUID(),
-                        type: "image",
+                        type: "image" as "image",
                         url: url
                     }));
                     setPanels(prev => [...newPanels, ...prev].slice(0, 5));
@@ -196,8 +191,8 @@ export default function FridayHUD() {
           speech.speak(data.reply);
         }
       } catch (err) {
-        setLastSpeech({ role: "assistant", text: "Me desculpe Senhor. O link temporal de Quota do Google recusou a conexão temporalmente." });
-        speech.speak("Me desculpe Senhor. O link temporal de Quota do Google recusou a conexão.");
+        setLastSpeech({ role: "assistant", text: "Me desculpe Senhor. Erro na conexão matriz principal." });
+        speech.speak("Me desculpe Senhor. Erro na conexão matriz principal.");
       } finally {
         setIsLoading(false);
         proactive.resetSilenceTimer();
@@ -207,14 +202,12 @@ export default function FridayHUD() {
     [isLoading, conversationId]
   );
 
-  // ── Speech ────────────────────────────────────────────────────────────────
   const speech = useSpeech({
     onTranscript: (text) => sendMessage(text),
     onError: (err) => console.warn("[Speech]", err),
     lang: "pt-BR",
   });
 
-  // ── Proactive & Alerts ──────────────────────────────────────────────────
   const proactive = useProactive({
     conversationId,
     silenceThresholdMs: 5 * 60 * 1000,
@@ -236,7 +229,6 @@ export default function FridayHUD() {
     },
   });
 
-  // ── Handlers ──────────────────────────────────────────────────────────────
   const handleMicToggle = useCallback(() => {
     const next = !micEnabled;
     setMicEnabled(next);
@@ -256,27 +248,27 @@ export default function FridayHUD() {
     if (stored) setConversationId(stored);
   }, []);
 
-  // ── Render ────────────────────────────────────────────────────────────────
   const themeColor = isFocusMode ? "#ff1a1a" : "#00f0ff";
   const themeGlow = isFocusMode ? "rgba(255, 26, 26, 0.6)" : "rgba(0, 240, 255, 0.6)";
 
   return (
-    <div className="fixed inset-0 overflow-hidden bg-black font-mono text-xs selection:bg-cyan-500/30 flex flex-col justify-between">
+    <div className="fixed inset-0 overflow-hidden bg-black font-mono text-xs selection:bg-cyan-500/30">
         
-      {/* ── 3D Canvas Background ── */}
-      <div className="absolute inset-0 z-0">
-        <Canvas camera={{ position: [0, 0, 10], fov: 75 }} dpr={[1, 2]}>
+      {/* ── 3D Canvas Background (Takes explicitly exactly 100vh) ── */}
+      <div className="absolute inset-0 z-0 bg-transparent">
+        <Canvas camera={{ position: [0, 0, 10], fov: 75 }} dpr={[1, 2]} style={{ width: '100%', height: '100%' }}>
           <color attach="background" args={["#000000"]} />
+          {/* Fog to hide extreme edges smoothly */}
+          <fog attach="fog" args={["#000", 5, 25]} />
+          
           <BackgroundAtoms isFocusMode={isFocusMode} />
           <ParticleSphere volume={speech.volume} isFocusMode={isFocusMode} isProcessing={isLoading || speech.state === "processing"} />
-          <EffectComposer>
-            <Bloom luminanceThreshold={0.2} luminanceSmoothing={0.9} intensity={1.5} />
-          </EffectComposer>
+          {/* EFFECT COMPOSER AND BLOOM REMOVED TO PREVENT BUGS - We use AdditiveBlending instead for glow */}
         </Canvas>
       </div>
 
       {/* ── HUD Overlay (Z-10) ── */}
-      <div className="relative z-10 pointer-events-none flex flex-col justify-between h-full p-4 sm:p-10">
+      <div className="absolute inset-0 z-10 pointer-events-none flex flex-col justify-between p-4 sm:p-10">
         
         {/* Top Header - Pure floating hologram style */}
         <header className="flex justify-between items-start shrink-0">
@@ -285,14 +277,14 @@ export default function FridayHUD() {
                     {isFocusMode ? "Sexta-Feira // Foco" : "Sexta-Feira"}
                 </h1>
                 <p className="tracking-widest opacity-80 mt-3 text-xs sm:text-sm font-bold uppercase" style={{ color: themeColor, textShadow: `0 0 10px ${themeColor}` }}>
-                    SYS_BUILD 3.1.0 · {conversationId ? `LINK:${conversationId.slice(0,8)}` : "OFFLINE_LINK"}
+                    SYS_BUILD 3.2.0 · {conversationId ? `LINK:${conversationId.slice(0,8)}` : "OFFLINE_LINK"}
                 </p>
             </div>
             
             <div className="text-right">
                 <div className="flex items-center gap-3 justify-end text-xs sm:text-sm">
                     <div className="w-3 h-3 rounded-full animate-pulse" style={{ backgroundColor: themeColor, boxShadow: `0 0 15px ${themeColor}` }} />
-                    <span style={{ color: themeColor, textShadow: `0 0 10px ${themeColor}` }} className="font-bold tracking-[0.2em] uppercase hidden sm:inline">
+                    <span style={{ color: themeColor, textShadow: `0 0 10px ${themeColor}` }} className="font-bold tracking-[0.2em] uppercase hidden sm:block">
                         SISTEMA ATIVO
                     </span>
                 </div>
@@ -303,7 +295,7 @@ export default function FridayHUD() {
         </header>
 
         {/* Floating Holographic Panels Area */}
-        <div className="absolute top-1/4 left-4 sm:left-10 w-64 sm:w-80 space-y-8">
+        <div className="absolute top-1/4 left-4 sm:left-10 w-64 sm:w-80 space-y-8 z-20">
             <AnimatePresence>
                 {panels.map((panel) => (
                     <motion.div
@@ -339,7 +331,7 @@ export default function FridayHUD() {
         </div>
 
         {/* Central Subtitles & Controls */}
-        <footer className="w-full flex flex-col items-center justify-end pb-4 sm:pb-8 gap-4 sm:gap-8 relative z-20 shrink-0">
+        <footer className="w-full flex-shrink-0 flex flex-col items-center pb-4 sm:pb-8 gap-4 sm:gap-8 relative z-30">
             {/* Holographic Subtitles */}
             <AnimatePresence mode="wait">
                 {lastSpeech && (
