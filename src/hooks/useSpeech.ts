@@ -154,16 +154,16 @@ export function useSpeech({ onTranscript, onError, lang = "pt-BR" }: UseSpeechOp
 
       const utterance = new SpeechSynthesisUtterance(text);
       utterance.lang = lang;
-      utterance.rate = 1.05;
-      utterance.pitch = 0.8; // Pitch um pouco mais grave, suave
+      utterance.rate = 1.1; // Um pouco mais rápido para fluidez natural
+      utterance.pitch = 1.1; // Mais agudo (perfil feminino F.R.I.D.A.Y)
       utterance.volume = 1.0;
 
-      // Preferir voz masculina formal, "Google" ou "Microsoft Daniel"
+      // Preferir vozes nativas femininas no Windows ou Google (Ex: Francisca, Luciana)
       const voices = synthRef.current.getVoices();
       const preferred = voices.find(
         (v) =>
           v.lang.startsWith("pt") &&
-          (v.name.includes("Daniel") || v.name.includes("Google") || v.name.includes("Microsoft"))
+          (v.name.includes("Francisca") || v.name.includes("Luciana") || (v.name.includes("Google") && !v.name.includes("Daniel")))
       );
       if (preferred) {
         utterance.voice = preferred;

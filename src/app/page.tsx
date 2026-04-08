@@ -13,10 +13,10 @@ import { motion, AnimatePresence } from "framer-motion";
 
 function BackgroundAtoms({ isFocusMode }: { isFocusMode: boolean }) {
   const points = useMemo(() => {
-    const p = new Float32Array(800 * 3);
-    for (let i = 0; i < 800; i++) {
-        p[i * 3] = (Math.random() - 0.5) * 40;
-        p[i * 3 + 1] = (Math.random() - 0.5) * 40;
+    const p = new Float32Array(1500 * 3);
+    for (let i = 0; i < 1500; i++) {
+        p[i * 3] = (Math.random() - 0.5) * 50;
+        p[i * 3 + 1] = (Math.random() - 0.5) * 50;
         p[i * 3 + 2] = (Math.random() - 0.5) * 40 - 15;
     }
     return p;
@@ -26,12 +26,12 @@ function BackgroundAtoms({ isFocusMode }: { isFocusMode: boolean }) {
 
   useFrame((state) => {
     if (!ref.current) return;
-    ref.current.rotation.y += 0.0005;
-    ref.current.rotation.x += 0.0002;
+    ref.current.rotation.y += 0.0002;
+    ref.current.rotation.x += 0.0001;
     
     // Parallax interacting with mouse position
-    const targetX = state.mouse.x * 2;
-    const targetY = state.mouse.y * 2;
+    const targetX = state.mouse.x * 3;
+    const targetY = state.mouse.y * 3;
     ref.current.position.x += (targetX - ref.current.position.x) * 0.02;
     ref.current.position.y += (targetY - ref.current.position.y) * 0.02;
   });
@@ -40,9 +40,9 @@ function BackgroundAtoms({ isFocusMode }: { isFocusMode: boolean }) {
     <Points ref={ref} positions={points} stride={3} frustumCulled={false}>
       <PointMaterial 
         transparent 
-        color={isFocusMode ? "#ff4d4d" : "#4da6ff"} 
-        size={0.15} 
-        opacity={0.4} 
+        color={isFocusMode ? "#ff1a1a" : "#00f0ff"} 
+        size={0.10} 
+        opacity={0.3} 
         depthWrite={false} 
         sizeAttenuation={true} 
         blending={THREE.AdditiveBlending}
@@ -54,15 +54,14 @@ function BackgroundAtoms({ isFocusMode }: { isFocusMode: boolean }) {
 // ── 3D Multi-layered Explosive Sphere ─────────────────────────────────────────
 
 function ParticleSphere({ volume, isFocusMode, isProcessing }: { volume: number; isFocusMode: boolean; isProcessing: boolean }) {
-  // Drastically reduced count to save GPU, but AdditiveBlending makes them perfectly bright
-  const layer1 = useMemo(() => createSpherePoints(6000, 3.5), []);
-  const layer2 = useMemo(() => createSpherePoints(2500, 3.2), []);
-  const layer3 = useMemo(() => createSpherePoints(800, 2.8), []);
+  const layer1 = useMemo(() => createSpherePoints(8000, 3.5), []);
+  const layer2 = useMemo(() => createSpherePoints(3500, 3.2), []);
+  const layer3 = useMemo(() => createSpherePoints(1500, 2.7), []);
 
   function createSpherePoints(count: number, baseRadius: number) {
     const p = new Float32Array(count * 3);
     for (let i = 0; i < count; i++) {
-        const r = baseRadius + (Math.random() * 0.8); 
+        const r = baseRadius + (Math.random() * 0.9); 
         const theta = 2 * Math.PI * Math.random();
         const phi = Math.acos(2 * Math.random() - 1);
         p[i * 3] = r * Math.sin(phi) * Math.cos(theta);
@@ -73,44 +72,46 @@ function ParticleSphere({ volume, isFocusMode, isProcessing }: { volume: number;
   }
 
   const groupRef = useRef<any>();
+  const coreRef = useRef<any>();
 
   useFrame((state, delta) => {
-    if (!groupRef.current) return;
+    if (!groupRef.current || !coreRef.current) return;
     
-    groupRef.current.rotation.x -= delta / (isProcessing ? 2 : 4);
-    groupRef.current.rotation.y -= delta / (isProcessing ? 3 : 6);
+    groupRef.current.rotation.x -= delta / (isProcessing ? 1.5 : 5);
+    groupRef.current.rotation.y -= delta / (isProcessing ? 2.5 : 8);
+
+    coreRef.current.rotation.y += delta / 2;
     
     // Explosion Effect
-    const explosiveVol = Math.pow(volume, 2.0) * 8; 
-    const targetScale = 1.0 + explosiveVol + (isProcessing ? 0.5 : 0);
+    const explosiveVol = Math.pow(volume, 2.5) * 12; 
+    const targetScale = 1.0 + explosiveVol + (isProcessing ? 0.3 : 0);
     
     const currentScale = groupRef.current.scale.x;
-    const lerpSpeed = targetScale > currentScale ? 0.3 : 0.05;
+    const lerpSpeed = targetScale > currentScale ? 0.4 : 0.03;
     
     const newScale = currentScale + (targetScale - currentScale) * lerpSpeed;
     groupRef.current.scale.set(newScale, newScale, newScale);
     
     // Smooth Mouse Tracking
-    const targetX = state.mouse.x * 2;
-    const targetY = state.mouse.y * 2;
-    groupRef.current.position.x += (targetX - groupRef.current.position.x) * 0.1;
-    groupRef.current.position.y += (targetY - groupRef.current.position.y) * 0.1;
+    const targetX = state.mouse.x * 2.5;
+    const targetY = state.mouse.y * 2.5;
+    groupRef.current.position.x += (targetX - groupRef.current.position.x) * 0.08;
+    groupRef.current.position.y += (targetY - groupRef.current.position.y) * 0.08;
   });
 
-  const baseColor = isFocusMode ? "#ff0000" : isProcessing ? "#9933ff" : "#00d4ff";
+  const baseColor = isFocusMode ? "#ff0000" : isProcessing ? "#b366ff" : "#00d4ff";
   const coreColor = isFocusMode ? "#ffaaaa" : "#ffffff";
 
   return (
     <group ref={groupRef} rotation={[0, 0, Math.PI / 6]}>
-      {/* Additive blending makes overlapping points literally glow like stars (No PostProcessing required) */}
       <Points positions={layer1} stride={3} frustumCulled={false}>
-        <PointMaterial transparent color={baseColor} size={0.03} opacity={0.6} depthWrite={false} sizeAttenuation={true} blending={THREE.AdditiveBlending}/>
+        <PointMaterial transparent color={baseColor} size={0.03} opacity={0.7} depthWrite={false} sizeAttenuation={true} blending={THREE.AdditiveBlending}/>
       </Points>
       <Points positions={layer2} stride={3} frustumCulled={false}>
-        <PointMaterial transparent color={baseColor} size={0.06} opacity={0.8} depthWrite={false} sizeAttenuation={true} blending={THREE.AdditiveBlending}/>
+        <PointMaterial transparent color={isProcessing ? "#ffffff" : baseColor} size={0.06} opacity={0.9} depthWrite={false} sizeAttenuation={true} blending={THREE.AdditiveBlending}/>
       </Points>
-      <Points positions={layer3} stride={3} frustumCulled={false}>
-        <PointMaterial transparent color={coreColor} size={0.12} opacity={1.0} depthWrite={false} sizeAttenuation={true} blending={THREE.AdditiveBlending}/>
+      <Points ref={coreRef} positions={layer3} stride={3} frustumCulled={false}>
+        <PointMaterial transparent color={coreColor} size={0.15} opacity={1.0} depthWrite={false} sizeAttenuation={true} blending={THREE.AdditiveBlending}/>
       </Points>
     </group>
   );
@@ -119,10 +120,12 @@ function ParticleSphere({ volume, isFocusMode, isProcessing }: { volume: number;
 // ── Types ───────────────────────────────────────────────────────────────────
 interface PanelData {
   id: string;
-  type: "image" | "alert";
+  type: "search" | "alert";
   content?: string;
   url?: string;
   title?: string;
+  sources?: { title: string; url: string }[];
+  images?: string[];
 }
 
 // ── Main Page ─────────────────────────────────────────────────────────────────
@@ -175,13 +178,19 @@ export default function FridayHUD() {
                 if (action.name === "toggle_focus_mode") {
                     setIsFocusMode(prev => !prev);
                 }
-                if (action.name === "web_search" && action.data?.images?.length > 0) {
-                    const newPanels = action.data.images.map((url: string) => ({
-                        id: crypto.randomUUID(),
-                        type: "image" as "image",
-                        url: url
-                    }));
-                    setPanels(prev => [...newPanels, ...prev].slice(0, 5));
+                if (action.name === "web_search") {
+                    const searchSources = action.data?.sources || [];
+                    const searchImages = action.data?.images || [];
+                    
+                    if (searchSources.length > 0 || searchImages.length > 0) {
+                        setPanels(prev => [{
+                            id: crypto.randomUUID(),
+                            type: "search",
+                            title: "PESQUISA DE REDE",
+                            sources: searchSources,
+                            images: searchImages
+                        }, ...prev].slice(0, 3)); // Keep max 3 heavy panels
+                    }
                 }
             });
         }
@@ -192,7 +201,7 @@ export default function FridayHUD() {
         }
       } catch (err) {
         setLastSpeech({ role: "assistant", text: "Me desculpe Senhor. Erro na conexão matriz principal." });
-        speech.speak("Me desculpe Senhor. Erro na conexão matriz principal.");
+        speech.speak("Me desculpe Senhor. Erro na matriz principal de processamento.");
       } finally {
         setIsLoading(false);
         proactive.resetSilenceTimer();
@@ -225,7 +234,7 @@ export default function FridayHUD() {
       const msg = `Alerta ativado, Senhor: ${alert.label}`;
       setLastSpeech({ role: "assistant", text: msg });
       speech.speak(msg);
-      setPanels(prev => [{ id: crypto.randomUUID(), type: "alert", title: "ALERTA", content: alert.label }, ...prev].slice(0,5));
+      setPanels(prev => [{ id: crypto.randomUUID(), type: "alert", title: "ALERTA", content: alert.label }, ...prev].slice(0,3));
     },
   });
 
@@ -248,81 +257,129 @@ export default function FridayHUD() {
     if (stored) setConversationId(stored);
   }, []);
 
-  const themeColor = isFocusMode ? "#ff1a1a" : "#00f0ff";
-  const themeGlow = isFocusMode ? "rgba(255, 26, 26, 0.6)" : "rgba(0, 240, 255, 0.6)";
+  const themeColor = isFocusMode ? "#ff3333" : "#00e5ff";
+  const themeGlow = isFocusMode ? "rgba(255, 51, 51, 0.4)" : "rgba(0, 229, 255, 0.4)";
 
   return (
-    <div style={{ position: 'fixed', top: 0, left: 0, width: '100vw', height: '100vh', overflow: 'hidden', backgroundColor: 'black' }} className="font-mono text-xs selection:bg-cyan-500/30">
+    <div style={{ position: 'fixed', top: 0, left: 0, width: '100vw', height: '100vh', overflow: 'hidden', backgroundColor: '#050505' }} className="font-mono text-xs selection:bg-cyan-500/30">
         
-      {/* ── 3D Canvas Background (Takes explicitly exactly 100vh) ── */}
+      {/* ── 3D Canvas Background ── */}
       <div style={{ position: 'absolute', top: 0, left: 0, width: '100vw', height: '100vh', zIndex: 0 }} className="bg-transparent">
         <Canvas camera={{ position: [0, 0, 10], fov: 75 }} dpr={[1, 2]} style={{ width: '100vw', height: '100vh', display: 'block' }}>
-          <color attach="background" args={["#000000"]} />
-          {/* Fog to hide extreme edges smoothly */}
-          <fog attach="fog" args={["#000", 5, 25]} />
+          <color attach="background" args={["#00050a"]} />
+          <fog attach="fog" args={["#00050a", 5, 25]} />
           
           <BackgroundAtoms isFocusMode={isFocusMode} />
           <ParticleSphere volume={speech.volume} isFocusMode={isFocusMode} isProcessing={isLoading || speech.state === "processing"} />
-          {/* EFFECT COMPOSER AND BLOOM REMOVED TO PREVENT BUGS - We use AdditiveBlending instead for glow */}
         </Canvas>
       </div>
 
-      {/* ── HUD Overlay (Z-10) ── */}
-      <div style={{ position: 'absolute', top: 0, left: 0, width: '100vw', height: '100vh', zIndex: 10, display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }} className="pointer-events-none p-4 sm:p-10">
+      {/* ── Pure CSS HUD Overlays ── */}
+      <div className="absolute inset-0 pointer-events-none z-0" style={{
+          background: `radial-gradient(circle at center, transparent 30%, rgba(0,0,0,0.8) 100%)`, // Vignette
+      }} />
+      <div className="absolute inset-0 pointer-events-none z-0 mix-blend-overlay opacity-20" style={{
+          backgroundImage: `repeating-linear-gradient(0deg, transparent, transparent 2px, ${themeColor} 2px, ${themeColor} 4px)` // Scanlines
+      }} />
+
+      {/* ── HUD Center Reticles ── */}
+      <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-0 opacity-30">
+          <motion.div 
+            animate={{ rotate: 360 }} 
+            transition={{ repeat: Infinity, duration: 60, ease: "linear" }}
+            className="w-[800px] h-[800px] rounded-full border border-dashed opacity-20" 
+            style={{ borderColor: themeColor }} 
+          />
+          <motion.div 
+            animate={{ rotate: -360 }} 
+            transition={{ repeat: Infinity, duration: 40, ease: "linear" }}
+            className="absolute w-[600px] h-[600px] rounded-full border-t border-b opacity-40 mix-blend-screen" 
+            style={{ borderColor: themeColor }} 
+          />
+          {/* Inner targeting bounds */}
+          <div className="absolute w-[300px] h-[300px] border border-opacity-10" style={{ borderColor: themeColor }} />
+          <div className="absolute w-2 h-2 rounded-full" style={{ backgroundColor: themeColor, boxShadow: `0 0 10px ${themeColor}` }} />
+      </div>
+
+      {/* ── Outer Layout Overlay (Z-10) ── */}
+      <div style={{ position: 'absolute', top: 0, left: 0, width: '100vw', height: '100vh', zIndex: 10, display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }} className="pointer-events-none p-6 sm:p-12">
         
-        {/* Top Header - Pure floating hologram style */}
+        {/* Top Header - Hyper Premium */}
         <header className="flex justify-between items-start shrink-0">
-            <div>
-                <h1 className="font-display text-3xl sm:text-5xl tracking-[0.3em] font-black uppercase" style={{ color: themeColor, textShadow: `0 0 20px ${themeColor}, 0 0 40px ${themeColor}88` }}>
-                    {isFocusMode ? "Sexta-Feira // Foco" : "Sexta-Feira"}
+            <div className="relative">
+                {/* Techy Deco block */}
+                <div className="absolute -left-4 top-0 w-1 h-full opacity-70" style={{ backgroundColor: themeColor, boxShadow: `0 0 15px ${themeColor}` }} />
+                
+                <h1 className="font-display text-4xl sm:text-6xl tracking-[0.4em] font-black uppercase mix-blend-screen" style={{ color: "white", textShadow: `0 0 20px ${themeColor}, 0 0 40px ${themeColor}` }}>
+                    {isFocusMode ? "F.R.I.D.A.Y // FOCUS" : "F.R.I.D.A.Y"}
                 </h1>
-                <p className="tracking-widest opacity-80 mt-3 text-xs sm:text-sm font-bold uppercase" style={{ color: themeColor, textShadow: `0 0 10px ${themeColor}` }}>
-                    SYS_BUILD 3.2.0 · {conversationId ? `LINK:${conversationId.slice(0,8)}` : "OFFLINE_LINK"}
-                </p>
+                <div className="flex gap-4 mt-4 uppercase font-bold tracking-widest text-[10px] sm:text-xs opacity-80" style={{ color: themeColor }}>
+                    <span className="border px-2 py-1" style={{ borderColor: themeColor }}>SYS_BUILD 4.0</span>
+                    <span className="border px-2 py-1" style={{ borderColor: themeColor, backgroundColor: `${themeColor}22` }}>{conversationId ? `LINK:${conversationId.slice(0,8)}` : "STANDBY"}</span>
+                </div>
             </div>
             
             <div className="text-right">
                 <div className="flex items-center gap-3 justify-end text-xs sm:text-sm">
-                    <div className="w-3 h-3 rounded-full animate-pulse" style={{ backgroundColor: themeColor, boxShadow: `0 0 15px ${themeColor}` }} />
-                    <span style={{ color: themeColor, textShadow: `0 0 10px ${themeColor}` }} className="font-bold tracking-[0.2em] uppercase hidden sm:block">
-                        SISTEMA ATIVO
+                    <motion.div animate={{ opacity: [1, 0.2, 1] }} transition={{ repeat: Infinity, duration: 2 }} className="w-4 h-4 rounded-full" style={{ backgroundColor: themeColor, boxShadow: `0 0 20px ${themeColor}` }} />
+                    <span style={{ color: themeColor, textShadow: `0 0 10px ${themeColor}` }} className="font-bold tracking-[0.3em] uppercase hidden sm:block">
+                        MATRIX ONLINE
                     </span>
                 </div>
-                <p className="opacity-90 mt-2 text-lg sm:text-xl font-bold tracking-widest" style={{ color: themeColor, textShadow: `0 0 10px ${themeColor}` }}>
+                <p className="opacity-90 mt-4 text-3xl sm:text-4xl font-light tracking-[0.2em]" style={{ color: "white", textShadow: `0 0 20px ${themeColor}` }}>
                     {timeStr || "00:00:00"}
                 </p>
             </div>
         </header>
 
-        {/* Floating Holographic Panels Area */}
-        <div className="absolute top-1/4 left-4 sm:left-10 w-64 sm:w-80 space-y-8 z-20">
+        {/* Floating Holographic Cyberpunk Panels */}
+        <div className="absolute top-[20%] left-6 sm:left-12 w-80 sm:w-[450px] space-y-6 z-20">
             <AnimatePresence>
                 {panels.map((panel) => (
                     <motion.div
                         key={panel.id}
-                        initial={{ opacity: 0, x: -100, rotateY: 90 }}
-                        animate={{ opacity: 1, x: 0, rotateY: 0 }}
-                        exit={{ opacity: 0, scale: 0.8, filter: "blur(10px)" }}
-                        transition={{ type: "spring", damping: 20 }}
-                        className="p-1 border bg-transparent pointer-events-auto relative overflow-hidden"
-                        style={{ borderColor: themeGlow, boxShadow: `0 0 30px ${themeGlow}44` }}
+                        initial={{ opacity: 0, x: -100, clipPath: 'inset(0 100% 0 0)' }}
+                        animate={{ opacity: 1, x: 0, clipPath: 'inset(0 0 0 0)' }}
+                        exit={{ opacity: 0, scale: 0.9, filter: "blur(20px)" }}
+                        transition={{ type: "spring", damping: 25, mass: 1.2 }}
+                        className="pointer-events-auto relative p-1 transition-all"
                     >
-                        {/* Corner Accents */}
-                        <div className="absolute top-0 left-0 w-3 h-3 border-t-2 border-l-2" style={{ borderColor: themeColor }} />
-                        <div className="absolute top-0 right-0 w-3 h-3 border-t-2 border-r-2" style={{ borderColor: themeColor }} />
-                        <div className="absolute bottom-0 left-0 w-3 h-3 border-b-2 border-l-2" style={{ borderColor: themeColor }} />
-                        <div className="absolute bottom-0 right-0 w-3 h-3 border-b-2 border-r-2" style={{ borderColor: themeColor }} />
+                        {/* High-tech Borders */}
+                        <div className="absolute inset-0 border bg-black/40 backdrop-blur-xl" style={{ borderColor: themeColor, boxShadow: `inset 0 0 30px ${themeGlow}, 0 0 15px ${themeGlow}` }} />
+                        <div className="absolute top-0 right-0 w-8 h-8 border-t-4 border-r-4" style={{ borderColor: "white" }} />
+                        <div className="absolute bottom-0 left-0 w-8 h-8 border-b-4 border-l-4" style={{ borderColor: "white" }} />
                         
-                        <div className="bg-black/60 backdrop-blur-xl p-2 w-full h-full">
-                            {panel.type === "image" && (
-                                // eslint-disable-next-line @next/next/no-img-element
-                                <img src={panel.url} alt="Holograma" className="w-full h-32 sm:h-40 object-cover opacity-90 mix-blend-screen grayscale-[20%] contrast-125" />
-                            )}
-                            {panel.type === "alert" && (
-                                <div className="text-center p-4">
-                                    <div style={{ color: "#ffb300", textShadow: "0 0 10px #ffb300" }} className="mb-2 text-lg uppercase font-black tracking-widest">{panel.title}</div>
-                                    <div className="text-white opacity-90 font-bold text-sm tracking-wider">{panel.content}</div>
+                        <div className="relative p-5 text-white">
+                            <div className="uppercase font-black tracking-widest text-sm mb-4 border-b pb-2 flex justify-between items-center" style={{ borderColor: themeColor, color: themeColor, textShadow: `0 0 10px ${themeColor}` }}>
+                                <span>{panel.title || "DADOS DO SATÉLITE"}</span>
+                                <span className="animate-pulse">● REC</span>
+                            </div>
+
+                            {panel.type === "search" && (
+                                <div className="space-y-4">
+                                    {panel.images && panel.images.length > 0 && (
+                                        <div className="grid grid-cols-3 gap-2">
+                                            {panel.images.map((img, i) => (
+                                                // eslint-disable-next-line @next/next/no-img-element
+                                                <img key={i} src={img} alt="Fonte visual" className="w-full h-24 object-cover border opacity-80 hover:opacity-100 mix-blend-screen transition-opacity" style={{ borderColor: themeColor }} />
+                                            ))}
+                                        </div>
+                                    )}
+                                    {panel.sources && panel.sources.length > 0 && (
+                                        <div className="space-y-2 mt-2">
+                                            <p className="text-[10px] uppercase text-gray-400 tracking-wider">Fontes Localizadas:</p>
+                                            {panel.sources.slice(0, 3).map((src, i) => (
+                                                <a key={i} href={src.url} target="_blank" rel="noreferrer" className="block text-xs truncate hover:underline" style={{ color: themeColor }}>
+                                                    {">"} {src.title}
+                                                </a>
+                                            ))}
+                                        </div>
+                                    )}
                                 </div>
+                            )}
+
+                            {panel.type === "alert" && (
+                                <p className="font-bold tracking-wider text-lg opacity-90">{panel.content}</p>
                             )}
                         </div>
                     </motion.div>
@@ -331,41 +388,46 @@ export default function FridayHUD() {
         </div>
 
         {/* Central Subtitles & Controls */}
-        <footer className="w-full flex-shrink-0 flex flex-col items-center pb-4 sm:pb-8 gap-4 sm:gap-8 relative z-30">
-            {/* Holographic Subtitles */}
+        <footer className="w-full flex-shrink-0 flex flex-col items-center pb-8 sm:pb-12 gap-8 relative z-30">
+            
+            {/* Holographic Subtitles with massive Drop Shadow */}
             <AnimatePresence mode="wait">
                 {lastSpeech && (
                     <motion.div
                         key={lastSpeech.text}
-                        initial={{ opacity: 0, scale: 0.9, filter: "blur(10px)", y: 20 }}
-                        animate={{ opacity: 1, scale: 1, filter: "blur(0px)", y: 0 }}
-                        exit={{ opacity: 0, y: 20, filter: "blur(10px)" }}
-                        className="max-w-xl sm:max-w-4xl text-center px-4 sm:px-12 py-2 sm:py-6 bg-transparent"
+                        initial={{ opacity: 0, scale: 0.9, y: 30 }}
+                        animate={{ opacity: 1, scale: 1, y: 0 }}
+                        exit={{ opacity: 0, y: -20 }}
+                        className="max-w-2xl sm:max-w-5xl text-center px-6 sm:px-16 py-4 bg-transparent"
                     >
-                        <span className="uppercase tracking-[0.4em] font-black text-[10px] sm:text-xs block mb-2 sm:mb-4" style={{ color: lastSpeech.role === "assistant" ? themeColor : "#fff", opacity: 0.9, textShadow: `0 0 15px ${lastSpeech.role === "assistant" ? themeColor : "#fff"}` }}>
-                            {lastSpeech.role === "assistant" ? "SEXTA-FEIRA" : "SENHOR"}
+                        <span className="uppercase tracking-[0.5em] font-black text-xs sm:text-sm block mb-4" style={{ color: lastSpeech.role === "assistant" ? themeColor : "white", textShadow: `0 0 20px ${lastSpeech.role === "assistant" ? themeColor : "white"}` }}>
+                            {lastSpeech.role === "assistant" ? "F.R.I.D.A.Y" : "SENHOR"}
                         </span>
-                        <p className="text-xl sm:text-3xl font-body leading-relaxed font-bold tracking-widest drop-shadow-2xl" 
-                           style={{ color: lastSpeech.role === "assistant" ? themeColor : "#ffffff", textShadow: `0 0 20px ${lastSpeech.role === "assistant" ? themeColor : "#ffffff"}, 0 0 40px ${themeGlow}` }}>
+                        <p className="text-3xl sm:text-5xl font-light leading-tight tracking-wider" 
+                           style={{ color: "white", textShadow: `0 0 30px ${lastSpeech.role === "assistant" ? themeColor : "white"}, 0 0 10px white` }}>
                             "{lastSpeech.text}"
                         </p>
                     </motion.div>
                 )}
             </AnimatePresence>
 
-            {/* Futuristic Mic Toggle */}
+            {/* Futuristic Reactor Toggle Button */}
             <button
                 onClick={handleMicToggle}
-                className="pointer-events-auto px-8 sm:px-16 py-3 sm:py-4 uppercase tracking-[0.3em] font-black text-xs sm:text-sm transition-all duration-300 relative overflow-hidden group"
+                className="pointer-events-auto px-16 sm:px-24 py-5 uppercase tracking-[0.4em] font-black text-sm sm:text-lg transition-all duration-500 relative overflow-hidden group"
                 style={{
-                    color: micEnabled ? "#000" : themeColor,
+                    color: micEnabled ? "#000" : "white",
                     backgroundColor: micEnabled ? themeColor : "transparent",
-                    border: `1px solid ${themeColor}`,
-                    boxShadow: micEnabled ? `0 0 30px ${themeColor}, inset 0 0 20px ${themeColor}` : "none"
+                    border: `2px solid ${themeColor}`,
+                    boxShadow: micEnabled ? `0 0 50px ${themeColor}, inset 0 0 30px ${themeColor}` : `0 0 20px ${themeColor}22`
                 }}
             >
+                {/* Tech background element */}
                 <div className="absolute inset-0 bg-white opacity-0 group-hover:opacity-20 transition-opacity" />
-                {micEnabled ? "LIGAÇÃO ESTABELECIDA" : "INICIAR CONEXÃO"}
+                <div className="absolute top-0 left-0 w-4 h-4 border-b-2 border-r-2" style={{ borderColor: micEnabled ? "#000" : themeColor }} />
+                <div className="absolute bottom-0 right-0 w-4 h-4 border-t-2 border-l-2" style={{ borderColor: micEnabled ? "#000" : themeColor }} />
+                
+                {micEnabled ? "CANAL ABERTO" : "INICIAR CONEXÃO"}
             </button>
         </footer>
       </div>

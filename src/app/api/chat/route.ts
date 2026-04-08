@@ -34,9 +34,12 @@ async function performWebSearch(query: string, numResults = 5): Promise<any> {
     let snippet = `[Busca web indisponível para "${query}"]`;
     let images: string[] = [];
 
+    let sources: { title: string; url: string }[] = [];
+
     if (webRes.ok) {
         const data = await webRes.json();
         const results = (data.web?.results ?? []).slice(0, numResults);
+        sources = results.map((r: any) => ({ title: r.title, url: r.url }));
         snippet = results
           .map((r: { title: string; description: string; url: string }) =>
             `Título: ${r.title}\nResumo: ${r.description}\nURL: ${r.url}`
@@ -49,7 +52,7 @@ async function performWebSearch(query: string, numResults = 5): Promise<any> {
         images = (imgData.results ?? []).slice(0, 3).map((r: any) => r.properties.url);
     }
 
-    return { snippet, images };
+    return { snippet, images, sources };
   } catch {
     return { snippet: `[Erro ao buscar: "${query}"]`, images: [] };
   }
