@@ -1,13 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
-import { groq, MODEL_NAME, FRIDAY_SYSTEM_PROMPT, FRIDAY_TOOLS, LLMMessage } from "@/lib/groq";
+import { groq, MODEL_NAME, FRIDAY_SYSTEM_PROMPT, FRIDAY_TOOLS } from "@/lib/groq";
 import {
   fetchRecentMessages,
   saveMessage,
   getOrCreateConversation,
-  createAlert,
 } from "@/lib/supabase";
 import fs from "fs/promises";
 import path from "path";
+import { exec } from "child_process";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -18,45 +18,74 @@ const CONTEXT_WINDOW = parseInt(process.env.CONTEXT_WINDOW_SIZE ?? "20");
 
 async function performWebSearch(query: string, numResults = 5): Promise<any> {
   try {
-    const webUrl = `https://api.search.brave.com/res/v1/web/search?q=${encodeURIComponent(query)}&count=${numResults}`;
-    const imgUrl = `https://api.search.brave.com/res/v1/images/search?q=${encodeURIComponent(query)}&count=3`;
-    
-    const headers = {
-      "Accept": "application/json",
-      "X-Subscription-Token": process.env.BRAVE_SEARCH_API_KEY ?? "",
-    };
+    const braveKey = process.env.BRAVE_SEARCH_API_KEY;
 
-    const [webRes, imgRes] = await Promise.all([
-      fetch(webUrl, { headers }),
-      fetch(imgUrl, { headers })
-    ]);
-
-    let snippet = `[Busca web indisponível para "${query}"]`;
-    let images: string[] = [];
-
-    let sources: { title: string; url: string }[] = [];
-
-    if (webRes.ok) {
+    // ── Path A: Brave API (if key is available) ────────────────────────────
+    if (braveKey) {
+      const webUrl = `https://api.search.brave.com/res/v1/web/search?q=${encodeURIComponent(query)}&count=${numResults}`;
+      const imgUrl = `https://api.search.brave.com/res/v1/images/search?q=${encodeURIComponent(query)}&count=3`;
+      const headers = { "Accept": "application/json", "X-Subscription-Token": braveKey };
+      const [webRes, imgRes] = await Promise.all([fetch(webUrl, { headers }), fetch(imgUrl, { headers })]);
+      let snippet = `Sem resultados para "${query}"`;
+      let images: string[] = [];
+      let sources: { title: string; url: string }[] = [];
+      if (webRes.ok) {
         const data = await webRes.json();
         const results = (data.web?.results ?? []).slice(0, numResults);
         sources = results.map((r: any) => ({ title: r.title, url: r.url }));
-        snippet = results
-          .map((r: { title: string; description: string; url: string }) =>
-            `Título: ${r.title}\nResumo: ${r.description}\nURL: ${r.url}`
-          )
-          .join("\n\n---\n\n");
-    }
-    
-    if (imgRes.ok) {
+        snippet = results.map((r: any) => `Título: ${r.title}\nResumo: ${r.description}\nURL: ${r.url}`).join("\n\n---\n\n");
+      }
+      if (imgRes.ok) {
         const imgData = await imgRes.json();
-        images = (imgData.results ?? []).slice(0, 3).map((r: any) => r.properties.url);
+        images = (imgData.results ?? []).slice(0, 3).map((r: any) => r.properties?.url).filter(Boolean);
+      }
+      return { snippet, images, sources };
     }
 
+    // ── Path B: Google Custom Search JSON API (key-less fallback using Serper) ─
+    // Uses Serper.dev which has a generous free tier and returns clean JSON
+    const serperKey = process.env.SERPER_API_KEY;
+    if (serperKey) {
+      const res = await fetch("https://google.serper.dev/search", {
+        method: "POST",
+        headers: { "X-API-KEY": serperKey, "Content-Type": "application/json" },
+        body: JSON.stringify({ q: query, num: numResults, gl: "br", hl: "pt" }),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        const organic = data.organic ?? [];
+        const sources = organic.slice(0, numResults).map((r: any) => ({ title: r.title, url: r.link }));
+        const snippet = sources.map((s: any) => `Título: ${s.title}\nURL: ${s.url}`).join("\n\n---\n\n");
+        const images: string[] = (data.images ?? []).slice(0, 3).map((i: any) => i.imageUrl).filter(Boolean);
+        return { snippet, images, sources };
+      }
+    }
+
+    // ── Path C: DuckDuckGo Instant Answer API (truly key-less, fast, free) ──
+    const ddgUrl = `https://api.duckduckgo.com/?q=${encodeURIComponent(query)}&format=json&no_html=1&skip_disambig=1`;
+    const ddgRes = await fetch(ddgUrl, { headers: { "User-Agent": "Mozilla/5.0 JarvisHUD/4.0" } });
+
+    if (!ddgRes.ok) throw new Error("DDG unreachable");
+
+    const ddgData = await ddgRes.json();
+    const relatedTopics = (ddgData.RelatedTopics ?? []).slice(0, numResults);
+    const sources = relatedTopics
+      .filter((t: any) => t.FirstURL && t.Text)
+      .map((t: any) => ({ title: t.Text?.slice(0, 80), url: t.FirstURL }));
+    const snippet = sources.length > 0
+      ? sources.map((s: any) => `Resultado: ${s.title}\nURL: ${s.url}`).join("\n\n---\n\n")
+      : ddgData.AbstractText || `DuckDuckGo não encontrou resultados diretos para "${query}". Tente reformular.`;
+
+    // DuckDuckGo doesn't return images natively — use placeholder
+    const images: string[] = ddgData.Image ? [ddgData.Image] : [];
+
     return { snippet, images, sources };
-  } catch {
-    return { snippet: `[Erro ao buscar: "${query}"]`, images: [] };
+  } catch (err: any) {
+    console.error("[web_search] Error:", err.message);
+    return { snippet: `Falha ao acessar mecanismos de busca para "${query}".`, images: [], sources: [{ title: "Busca falhou — reformule a pergunta", url: "#" }] };
   }
 }
+
 
 // ── Tool Executor ─────────────────────────────────────────────────────────────
 
@@ -78,8 +107,15 @@ async function executeTool(
         return result; 
       }
       case "demonstrate_virtual_folders": {
-        // This simulates a highly advanced 3D visual demonstration
-        return { action: "spawn_3d_folders", ui_triggered: true, count: 10 };
+        // Creates 10 real folders on the Desktop and echoes their paths back
+        const desktop = path.join(process.env.USERPROFILE || "C:\\Users\\Public", "Desktop");
+        const folderNames: string[] = [];
+        for (let i = 1; i <= 10; i++) {
+          const folderPath = path.join(desktop, `JARVIS_Pasta_${i}`);
+          await fs.mkdir(folderPath, { recursive: true });
+          folderNames.push(folderPath);
+        }
+        return { action: "spawn_3d_folders", ui_triggered: true, count: 10, folders_created: folderNames };
       }
       case "get_current_time": {
         const now = new Date();

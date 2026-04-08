@@ -153,20 +153,52 @@ export function useSpeech({ onTranscript, onError, lang = "pt-BR" }: UseSpeechOp
       synthRef.current.cancel();
 
       const utterance = new SpeechSynthesisUtterance(text);
-      utterance.lang = lang;
-      utterance.rate = 1.05; // Ritmo polido
-      utterance.pitch = 0.85; // Voz mais grave (perfil J.A.R.V.I.S)
+      utterance.lang = "pt-BR";
+      utterance.rate = 1.0;
+      utterance.pitch = 0.8;
       utterance.volume = 1.0;
 
-      // Preferir vozes nativas masculinas elegantes no Windows ou Google (Ex: Felipe, Daniel)
+      // Smart masculine voice picker: score voices and pick best male
       const voices = synthRef.current.getVoices();
-      const preferred = voices.find(
-        (v) =>
-          v.lang.startsWith("pt") &&
-          (v.name.includes("Felipe") || v.name.includes("Daniel") || v.name.includes("Arthur") || (v.name.includes("Google") && !v.name.includes("Francisca")))
-      );
-      if (preferred) {
-        utterance.voice = preferred;
+      
+      // Log available voices for debugging (see browser console)
+      console.log("[TTS] Available voices:", voices.map(v => `${v.name} (${v.lang})`).join(", "));
+
+      const scoredVoices = voices.map(v => {
+        let score = 0;
+        const nameLower = v.name.toLowerCase();
+        // Prefer pt-BR voices
+        if (v.lang === "pt-BR") score += 10;
+        if (v.lang.startsWith("pt")) score += 5;
+        // Prefer known masculine names
+        if (nameLower.includes("daniel")) score += 20;
+        if (nameLower.includes("arthur")) score += 15;
+        if (nameLower.includes("felipe")) score += 15;
+        if (nameLower.includes("reed")) score += 12;
+        if (nameLower.includes("guy")) score += 12;
+        if (nameLower.includes("ryan")) score += 10;
+        // Downrank known female voices
+        if (nameLower.includes("francisca")) score -= 50;
+        if (nameLower.includes("luciana")) score -= 50;
+        if (nameLower.includes("sonia")) score -= 50;
+        if (nameLower.includes("zira")) score -= 50;
+        if (nameLower.includes("aria")) score -= 50;
+        // Prefer Microsoft Neural voices when available
+        if (nameLower.includes("microsoft") && nameLower.includes("neural")) score += 8;
+        if (nameLower.includes("google")) score += 3;
+        return { voice: v, score };
+      });
+
+      scoredVoices.sort((a, b) => b.score - a.score);
+      const bestVoice = scoredVoices[0];
+      
+      if (bestVoice && bestVoice.score > 0) {
+        utterance.voice = bestVoice.voice;
+        // If we had to fall back to english voice, keep pt-BR lang for pronunciation tone
+        if (!bestVoice.voice.lang.startsWith("pt")) {
+          utterance.lang = "pt-BR"; 
+        }
+        console.log("[TTS] Using voice:", bestVoice.voice.name, "score:", bestVoice.score);
       }
 
       utterance.onstart = () => {
