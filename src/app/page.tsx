@@ -117,6 +117,47 @@ function ParticleSphere({ volume, isFocusMode, isProcessing }: { volume: number;
   );
 }
 
+// ── Virtual Holographic Folders ───────────────────────────────────────────────
+
+function VirtualFolders({ active }: { active: boolean }) {
+  const groupRef = useRef<any>();
+
+  useFrame((state, delta) => {
+    if (!groupRef.current) return;
+    groupRef.current.rotation.y += delta * 0.8;
+    groupRef.current.rotation.z = Math.sin(state.clock.elapsedTime * 0.5) * 0.2;
+    
+    // Smooth Scale in/out physics
+    const targetScale = active ? 1 : 0;
+    const currentScale = groupRef.current.scale.x;
+    const speed = active ? 0.04 : 0.08;
+    const newScale = currentScale + (targetScale - currentScale) * speed;
+    groupRef.current.scale.set(newScale, newScale, newScale);
+  });
+
+  return (
+    <group ref={groupRef} scale={0}>
+      {Array.from({ length: 10 }).map((_, i) => {
+        const angle = (i / 10) * Math.PI * 2;
+        const radius = 5.5;
+        const yOffset = Math.sin(angle * 3) * 1.5;
+        return (
+          <group key={i} position={[Math.cos(angle) * radius, yOffset, Math.sin(angle) * radius]} rotation={[0, -angle, 0]}>
+             <mesh>
+               <boxGeometry args={[1.5, 1.0, 0.05]} />
+               <meshBasicMaterial color="#ffcc00" transparent opacity={0.6} wireframe={true} blending={THREE.AdditiveBlending} />
+             </mesh>
+             <mesh>
+               <boxGeometry args={[1.4, 0.9, 0.04]} />
+               <meshBasicMaterial color="#ffcc00" transparent opacity={0.15} blending={THREE.AdditiveBlending} />
+             </mesh>
+          </group>
+        );
+      })}
+    </group>
+  );
+}
+
 // ── Types ───────────────────────────────────────────────────────────────────
 interface PanelData {
   id: string;
@@ -134,6 +175,7 @@ export default function FridayHUD() {
   const [isLoading, setIsLoading] = useState(false);
   const [micEnabled, setMicEnabled] = useState(false);
   const [timeStr, setTimeStr] = useState<string>("");
+  const [showFolders, setShowFolders] = useState(false);
   
   const [isFocusMode, setIsFocusMode] = useState(false);
   const [panels, setPanels] = useState<PanelData[]>([]);
@@ -177,6 +219,10 @@ export default function FridayHUD() {
             data.ui_actions.forEach((action: any) => {
                 if (action.name === "toggle_focus_mode") {
                     setIsFocusMode(prev => !prev);
+                }
+                if (action.name === "demonstrate_virtual_folders") {
+                    setShowFolders(true);
+                    setTimeout(() => setShowFolders(false), 8000);
                 }
                 if (action.name === "web_search") {
                     const searchSources = action.data?.sources || [];
@@ -271,6 +317,7 @@ export default function FridayHUD() {
           
           <BackgroundAtoms isFocusMode={isFocusMode} />
           <ParticleSphere volume={speech.volume} isFocusMode={isFocusMode} isProcessing={isLoading || speech.state === "processing"} />
+          <VirtualFolders active={showFolders} />
         </Canvas>
       </div>
 

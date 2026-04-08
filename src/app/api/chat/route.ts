@@ -71,25 +71,15 @@ async function executeTool(
         const query = functionArgs.query as string;
         const num = (functionArgs.num_results as number) ?? 5;
         const result = await performWebSearch(query, num);
+        // Force something to return so UI pops a card even if search fails
+        if (!result.sources || result.sources.length === 0) {
+            result.sources = [{ title: `Buscador encontrou 0 resultados precisos para: ${query}`, url: "#" }];
+        }
         return result; 
       }
-      case "create_alert": {
-        let parsedCondition = {};
-        try {
-          parsedCondition = typeof functionArgs.condition_json === 'string' 
-            ? JSON.parse(functionArgs.condition_json) 
-            : functionArgs.condition_json;
-        } catch (e) {
-          parsedCondition = { raw: functionArgs.condition_json };
-        }
-
-        const alert = await createAlert(
-          functionArgs.label as string,
-          functionArgs.type as string,
-          parsedCondition,
-          conversationId
-        );
-        return { success: true, alert_id: alert.id, label: alert.label };
+      case "demonstrate_virtual_folders": {
+        // This simulates a highly advanced 3D visual demonstration
+        return { action: "spawn_3d_folders", ui_triggered: true, count: 10 };
       }
       case "get_current_time": {
         const now = new Date();
@@ -101,7 +91,6 @@ async function executeTool(
       }
       case "read_local_file": {
         const safePath = path.resolve(process.cwd(), functionArgs.path);
-        // Proteção para não sair do diretório do app
         if (!safePath.startsWith(process.cwd())) return { error: "Acesso negado fora do diretório master" };
         const content = await fs.readFile(safePath, "utf-8");
         return { content: content.slice(0, 3000) + (content.length > 3000 ? "...(truncado)" : "") };

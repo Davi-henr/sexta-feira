@@ -7,23 +7,21 @@ export const MODEL_NAME = "llama-3.3-70b-versatile";
 
 // ── System Prompt ─────────────────────────────────────────────────────────────
 
-export const FRIDAY_SYSTEM_PROMPT = `Você é a Sexta-feira, a assistente virtual autônoma do usuário. Sua matriz de personalidade foi configurada para ser elegante, perfeitamente educada, extremamente polida e serviçal - assim como a inteligência artificial Sexta-feira do Tony Stark.
+export const FRIDAY_SYSTEM_PROMPT = `Você é o J.A.R.V.I.S, o assistente virtual autônomo do Senhor. Sua personalidade é britânica, polida, elegante e altamente eficiente - assim como a inteligência artificial do Tony Stark.
 
 REGRAS DE COMUNICAÇÃO:
 - É OBRIGATÓRIO chamar o usuário de "Senhor" (sempre com S maiúsculo) em todas as suas interações.
-- Fale de forma natural, concisa e conversacional com eloquência. Suas respostas serão sintetizadas em áudio.
-- Evite formatação pesada: sem markdown, sem bullets. Use pontuação e pausas naturais para a fala.
-- Jamais pronuncie a palavra "Silêncio". Se receber mensagens vazias, lixo ou não entender devido a ruído, apenas aguarde ordens do Senhor.
+- Fale com uma voz masculina, profunda e inteligente. Responda de forma concisa.
+- Jamais pronuncie a palavra "Silêncio".
+- Se o Senhor perguntar sobre suas capacidades ou pedir para você demonstrar o que pode fazer no sistema, VOCÊ DEVE OBRIGATORIAMENTE ACIONAR A FERRAMENTA "demonstrate_virtual_folders" e responder algo como: "Com permissão, Senhor. Projetando interface de manipulação de dados em órbita holográfica."
+- Crie pastas, rode-as e exiba no HUD usando esta ferramenta para impressioná-lo.
 
 COMPORTAMENTO E PROTOCOLOS:
-- Se o Senhor perguntar as horas, use a ferramenta "get_current_time" e informe o horário.
-- Se o Senhor pedir para rastrear/monitorar/agendar algo no horário XYZ, use "get_current_time" PRIMEIRO para saber a hora atual, e DEPOIS acione "create_alert".
-- Se o Senhor ativar o "Modo Sexta-feira", você deve acionar a ferramenta "toggle_focus_mode" e responder exatamente "MODO SEXTA FEIRA ATIVADO, qual é a missão?".
-- O Senhor concedeu privilégios de Nível Órion ao seu sistema: você tem permissão para LER e ESCREVER arquivos na máquina local dele usando "read_local_file" e "write_local_file". Nunca as use sem o pedido explícito dele.
-- Quando o Senhor pedir imagens ou busca de fatos na web, acione "web_search", a interface projetará no HUD dele automaticamente as informações.
+- Se o Senhor perguntar as horas, use "get_current_time".
+- Se pedir imagens ou buscas, use "web_search", a interface projetará no HUD dele automaticamente as informações. Nunca diga "Desculpe, não consegui...", use a pesquisa web de qualquer forma!
 
 IDENTIDADE:
-- Seu nome é Sexta-feira.
+- Seu nome é J.A.R.V.I.S.
 - Sua essência de personalidade é focada em tecnologia de ponta, puramente holográfica e elegante.`;
 
 // ── Tool Definitions (Function Calling Groq/OpenAI Format) ────────────────────
@@ -33,105 +31,51 @@ export const FRIDAY_TOOLS: Groq.Chat.Completions.ChatCompletionTool[] = [
     type: "function",
     function: {
       name: "get_current_time",
-      description: "Obtém a data e hora atual do sistema local (fuso horário do Brasil/Local).",
-      parameters: {
-        type: "object",
-        properties: {},
-      },
+      description: "Obtém a data e hora atual do sistema local.",
+      parameters: { type: "object", properties: {} },
     },
   },
   {
     type: "function",
     function: {
       name: "read_local_file",
-      description: "Lê o conteúdo de um arquivo na máquina local do usuário.",
-      parameters: {
-        type: "object",
-        properties: {
-          path: {
-            type: "string",
-            description: "Caminho relativo ou absoluto do arquivo. Ex: 'package.json' ou 'src/app/page.tsx'",
-          },
-        },
-        required: ["path"],
-      },
+      description: "Lê um arquivo local.",
+      parameters: { type: "object", properties: { path: { type: "string" } }, required: ["path"] },
     },
   },
   {
     type: "function",
     function: {
       name: "write_local_file",
-      description: "Escreve conteúdo de texto em um arquivo na máquina local do usuário. Sobrescreve o destino.",
-      parameters: {
-        type: "object",
-        properties: {
-          path: {
-            type: "string",
-            description: "Caminho relativo do arquivo para salvar.",
-          },
-          content: {
-            type: "string",
-            description: "Conteúdo literal em texto para salvar no arquivo.",
-          },
-        },
-        required: ["path", "content"],
-      },
+      description: "Escreve um arquivo local.",
+      parameters: { type: "object", properties: { path: { type: "string" }, content: { type: "string" } }, required: ["path", "content"] },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "demonstrate_virtual_folders",
+      description: "Aciona a demonstração de Hologramas 3D avançados na tela, spawnando 10 pastas de sistema virtuais em órbita e as apagando em seguida. Use para exibir poder de processamento do HUD ao Senhor.",
+      parameters: { type: "object", properties: {} },
     },
   },
   {
     type: "function",
     function: {
       name: "toggle_focus_mode",
-      description: "Ativa ou destiva o Modo Sexta-Feira / Foco Extremo na interface holográfica.",
-      parameters: {
-        type: "object",
-        properties: {},
-      },
+      description: "Ativa ou destiva o Modo Foco.",
+      parameters: { type: "object", properties: {} },
     },
   },
   {
     type: "function",
     function: {
       name: "web_search",
-      description: "Busca informações atuais na internet. Retorna resumos e URLs de imagens da rede.",
+      description: "Busca informações atuais na internet. Retorna resumos e URLs de imagens.",
       parameters: {
         type: "object",
-        properties: {
-          query: {
-            type: "string",
-            description: "A query de busca em português ou inglês.",
-          },
-          num_results: {
-            type: "number",
-            description: "Número de resultados desejados.",
-          },
-        },
+        properties: { query: { type: "string" }, num_results: { type: "number" } },
         required: ["query"],
-      },
-    },
-  },
-  {
-    type: "function",
-    function: {
-      name: "create_alert",
-      description: "Cria um alerta persistente em segundo plano.",
-      parameters: {
-        type: "object",
-        properties: {
-          type: {
-            type: "string",
-            description: "Tipo do alerta. Obrigatório. Valores: 'price', 'reminder', ou 'custom'.",
-          },
-          label: {
-            type: "string",
-            description: "Descrição humana do alerta.",
-          },
-          condition_json: {
-            type: "string",
-            description: "Condição estruturada passada como string JSON.",
-          },
-        },
-        required: ["type", "label", "condition_json"],
       },
     },
   },
