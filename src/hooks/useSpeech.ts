@@ -57,7 +57,7 @@ export function useSpeech({ onTranscript, onError, lang = "pt-BR" }: UseSpeechOp
           else if (v.lang.startsWith("pt")) score += 8;
           
           // Known masculine voice names (Windows/Chrome)
-          if (n.includes("daniel")) score += 25;
+          if (n.includes("daniel")) score += 5;  // SAPI old voice — robotic
           if (n.includes("antonio")) score += 25;
           if (n.includes("arthur")) score += 20;
           if (n.includes("felipe")) score += 20;
@@ -73,8 +73,8 @@ export function useSpeech({ onTranscript, onError, lang = "pt-BR" }: UseSpeechOp
 
           // Prefer Microsoft Online (Neural) voices when available — they sound human
           if (n.includes("online") || n.includes("neural")) score += 10;
-          // Google voices are OK  
-          if (n.includes("google") && v.lang.startsWith("pt")) score += 5;
+          // Google pt-BR is cloud-rendered and sounds MUCH more natural than Microsoft SAPI
+          if (n.includes("google") && v.lang === "pt-BR") score += 30;
 
           if (score > bestScore) {
             bestScore = score;

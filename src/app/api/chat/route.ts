@@ -61,23 +61,41 @@ async function performWebSearch(query: string, numResults = 5): Promise<any> {
       }
     }
 
-    // ── Path C: DuckDuckGo Instant Answer API (truly key-less, fast, free) ──
-    const ddgUrl = `https://api.duckduckgo.com/?q=${encodeURIComponent(query)}&format=json&no_html=1&skip_disambig=1`;
-    const ddgRes = await fetch(ddgUrl, { headers: { "User-Agent": "Mozilla/5.0 JarvisHUD/4.0" } });
+    // ── Path C: DuckDuckGo Lite Web Scraper (key-less fallback) ──
+    const ddgUrl = `https://lite.duckduckgo.com/lite/`;
+    const ddgRes = await fetch(ddgUrl, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/x-www-form-urlencoded",
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+      },
+      body: `q=${encodeURIComponent(query)}`
+    });
 
     if (!ddgRes.ok) throw new Error("DDG unreachable");
 
-    const ddgData = await ddgRes.json();
-    const relatedTopics = (ddgData.RelatedTopics ?? []).slice(0, numResults);
-    const sources = relatedTopics
-      .filter((t: any) => t.FirstURL && t.Text)
-      .map((t: any) => ({ title: t.Text?.slice(0, 80), url: t.FirstURL }));
-    const snippet = sources.length > 0
-      ? sources.map((s: any) => `Resultado: ${s.title}\nURL: ${s.url}`).join("\n\n---\n\n")
-      : ddgData.AbstractText || `DuckDuckGo não encontrou resultados diretos para "${query}". Tente reformular.`;
+    const html = await ddgRes.text();
+    const linkRegex = /<a rel="nofollow" href="([^"]+)" class='result-link'>([^<]+)<\/a>/g;
+    const snippetRegex = /<td class='result-snippet'>([\s\S]*?)<\/td>/g;
+    
+    let match;
+    const items = [];
+    while ((match = linkRegex.exec(html)) !== null && items.length < numResults) {
+      items.push({ url: match[1], title: match[2].trim() });
+    }
+    
+    const snippets = [];
+    while ((match = snippetRegex.exec(html)) !== null && snippets.length < numResults) {
+      const cleanSnippet = match[1].replace(/<\/?[^>]+(>|$)/g, "").trim(); // Remove basic HTML tags like <b>
+      snippets.push(cleanSnippet);
+    }
 
-    // DuckDuckGo doesn't return images natively — use placeholder
-    const images: string[] = ddgData.Image ? [ddgData.Image] : [];
+    const sources = items.map(t => ({ title: t.title, url: t.url }));
+    const snippet = items.length > 0
+      ? items.map((s, i) => `Título: ${s.title}\nResumo: ${snippets[i] || ""}\nURL: ${s.url}`).join("\n\n---\n\n")
+      : `DuckDuckGo não encontrou resultados diretos para "${query}". Tente reformular.`;
+
+    const images: string[] = []; // DDG Lite has no images, dummy empty
 
     return { snippet, images, sources };
   } catch (err: any) {
