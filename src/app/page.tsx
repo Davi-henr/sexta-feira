@@ -1,197 +1,91 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState, useMemo } from "react";
+import { Canvas, useFrame } from "@react-three/fiber";
+import { Points, PointMaterial } from "@react-three/drei";
 import { useSpeech } from "@/hooks/useSpeech";
 import { useProactive } from "@/hooks/useProactive";
 import { useAlerts } from "@/hooks/useAlerts";
 import type { DBAlert } from "@/lib/supabase";
+import { motion, AnimatePresence } from "framer-motion";
 
-// ── Types ─────────────────────────────────────────────────────────────────────
+// ── 3D Particle Sphere ────────────────────────────────────────────────────────
 
-interface Message {
+function ParticleSphere({ volume, isFocusMode, isProcessing }: { volume: number; isFocusMode: boolean; isProcessing: boolean }) {
+  const points = useMemo(() => {
+    const p = new Float32Array(5000 * 3);
+    for (let i = 0; i < 5000; i++) {
+        const r = 2;
+        const theta = 2 * Math.PI * Math.random();
+        const phi = Math.acos(2 * Math.random() - 1);
+        p[i * 3] = r * Math.sin(phi) * Math.cos(theta);
+        p[i * 3 + 1] = r * Math.sin(phi) * Math.sin(theta);
+        p[i * 3 + 2] = r * Math.cos(phi);
+    }
+    return p;
+  }, []);
+
+  const ref = useRef<any>();
+
+  useFrame((state, delta) => {
+    if (!ref.current) return;
+    ref.current.rotation.x -= delta / (isProcessing ? 5 : 10);
+    ref.current.rotation.y -= delta / (isProcessing ? 8 : 15);
+    
+    // Scale jumps with volume
+    const targetScale = 1 + volume * 1.5;
+    const currentScale = ref.current.scale.x;
+    const newScale = currentScale + (targetScale - currentScale) * 0.2;
+    ref.current.scale.set(newScale, newScale, newScale);
+  });
+
+  const color = isFocusMode ? "#ff2a2a" : isProcessing ? "#aa80ff" : "#00f0ff";
+
+  return (
+    <group rotation={[0, 0, Math.PI / 4]}>
+      <Points ref={ref} positions={points} stride={3} frustumCulled={false}>
+        <PointMaterial 
+            transparent 
+            color={color} 
+            size={0.03} 
+            sizeAttenuation={true} 
+            depthWrite={false} 
+            opacity={0.6 + (volume * 0.4)} 
+        />
+      </Points>
+    </group>
+  );
+}
+
+// ── Types & Interfaces ────────────────────────────────────────────────────────
+
+interface PanelData {
   id: string;
-  role: "user" | "assistant";
-  content: string;
-  timestamp: Date;
-  isProactive?: boolean;
-  isAlert?: boolean;
-}
-
-// ── Orb Visual Component ──────────────────────────────────────────────────────
-
-function FridayOrb({ state, volume }: { state: string; volume: number }) {
-  const orbClass =
-    state === "listening"   ? "orb-listening" :
-    state === "speaking"    ? "orb-speaking"  :
-    state === "processing"  ? "orb-processing" : "orb-idle";
-
-  const mainColor =
-    state === "listening" ? "#ff4444" :
-    state === "speaking"  ? "#00f0ff" :
-    state === "processing"? "#aa80ff" : "#00f0ff";
-
-  const scale = 1 + volume * 0.15;
-
-  return (
-    <div className="relative flex items-center justify-center" style={{ width: 220, height: 220 }}>
-      {/* Outer decorative ring */}
-      <div
-        className="ring-outer absolute border rounded-full"
-        style={{
-          width: 210, height: 210,
-          borderColor: `${mainColor}22`,
-          borderTopColor: mainColor,
-          borderWidth: 1,
-        }}
-      />
-      {/* Middle ring */}
-      <div
-        className="ring-inner absolute border rounded-full"
-        style={{
-          width: 175, height: 175,
-          borderColor: `${mainColor}15`,
-          borderRightColor: mainColor,
-          borderWidth: 1,
-          opacity: 0.6,
-        }}
-      />
-      {/* Volume-responsive ring */}
-      <div
-        className="absolute rounded-full transition-all duration-75"
-        style={{
-          width: `${130 + volume * 30}px`,
-          height: `${130 + volume * 30}px`,
-          border: `1px solid ${mainColor}`,
-          opacity: 0.15 + volume * 0.3,
-        }}
-      />
-      {/* Core orb */}
-      <div
-        className={`${orbClass} absolute rounded-full`}
-        style={{
-          width: 100, height: 100,
-          background: `radial-gradient(circle at 35% 35%, ${mainColor}33, transparent 60%), radial-gradient(circle, ${mainColor}18 0%, transparent 70%)`,
-          border: `1px solid ${mainColor}66`,
-          transform: `scale(${scale})`,
-          transition: "transform 0.07s ease-out",
-        }}
-      >
-        {/* Inner glow core */}
-        <div
-          className="absolute inset-0 rounded-full"
-          style={{
-            background: `radial-gradient(circle at center, ${mainColor}40 0%, transparent 65%)`,
-          }}
-        />
-      </div>
-
-      {/* State label */}
-      <div
-        className="absolute bottom-0 font-mono text-xs tracking-widest uppercase"
-        style={{ color: mainColor, opacity: 0.7, fontSize: 9, bottom: -2 }}
-      >
-        {state === "idle"       ? "STANDBY" :
-         state === "listening"  ? "ESCUTANDO" :
-         state === "processing" ? "PROCESSANDO" : "FALANDO"}
-      </div>
-    </div>
-  );
-}
-
-// ── Waveform Component ────────────────────────────────────────────────────────
-
-function Waveform({ active, color = "#00f0ff" }: { active: boolean; color?: string }) {
-  const bars = [0.3, 0.6, 1, 0.8, 0.5, 0.9, 0.4, 0.7, 1, 0.6, 0.3];
-  return (
-    <div className="flex items-center gap-0.5 h-5">
-      {bars.map((h, i) => (
-        <div
-          key={i}
-          className="wave-bar rounded-full"
-          style={{
-            width: 3,
-            height: `${h * 20}px`,
-            background: color,
-            opacity: active ? 0.8 : 0.2,
-            "--delay": active ? `${0.1 * i}s` : "0s",
-            animationPlayState: active ? "running" : "paused",
-          } as React.CSSProperties}
-        />
-      ))}
-    </div>
-  );
-}
-
-// ── Alert Toast ───────────────────────────────────────────────────────────────
-
-function AlertToast({ alert, onDismiss }: { alert: DBAlert; onDismiss: () => void }) {
-  return (
-    <div
-      className="alert-flash border rounded-lg p-3 mb-2 font-body text-sm"
-      style={{ borderColor: "var(--amber-alert)", background: "rgba(255,179,0,0.06)" }}
-    >
-      <div className="flex items-start gap-2">
-        <span style={{ color: "var(--amber-alert)", fontSize: 16 }}>⚠</span>
-        <div className="flex-1">
-          <div className="font-mono text-xs mb-1" style={{ color: "var(--amber-alert)", opacity: 0.8 }}>
-            ALERTA ATIVADO
-          </div>
-          <div style={{ color: "var(--text-primary)" }}>{alert.label}</div>
-          {alert.trigger_data && (
-            <div className="mt-1 font-mono text-xs" style={{ color: "var(--text-secondary)" }}>
-              {JSON.stringify(alert.trigger_data)}
-            </div>
-          )}
-        </div>
-        <button
-          onClick={onDismiss}
-          className="text-xs font-mono px-2 py-0.5 rounded border transition-colors"
-          style={{
-            borderColor: "var(--amber-alert)",
-            color: "var(--amber-alert)",
-          }}
-        >
-          OK
-        </button>
-      </div>
-    </div>
-  );
+  type: "image" | "text" | "alert";
+  content?: string;
+  url?: string;
+  title?: string;
 }
 
 // ── Main Page ─────────────────────────────────────────────────────────────────
 
-export default function FridayPage() {
-  const [messages, setMessages] = useState<Message[]>([]);
+export default function FridayHUD() {
   const [conversationId, setConversationId] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
-  const [alertQueue, setAlertQueue] = useState<DBAlert[]>([]);
   const [micEnabled, setMicEnabled] = useState(false);
-  const [inputText, setInputText] = useState("");
+  
+  // UI State
+  const [isFocusMode, setIsFocusMode] = useState(false);
+  const [panels, setPanels] = useState<PanelData[]>([]);
+  const [lastSpeech, setLastSpeech] = useState<{role: "user"|"assistant", text: string} | null>(null);
 
-  const messagesEndRef = useRef<HTMLDivElement>(null);
-  const inputRef = useRef<HTMLInputElement>(null);
-
-  // ── Scroll to bottom on new messages ──────────────────────────────────────
-
-  useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages]);
-
-  // ── Send message (unified handler) ───────────────────────────────────────
-
+  // ── Send message ────────────────────────────────────────────────────────
   const sendMessage = useCallback(
     async (text: string, opts?: { isProactive?: boolean }) => {
       if (!text.trim() || isLoading) return;
 
-      const userMsg: Message = {
-        id: crypto.randomUUID(),
-        role: "user",
-        content: text,
-        timestamp: new Date(),
-      };
-
       if (!opts?.isProactive) {
-        setMessages((prev) => [...prev, userMsg]);
+        setLastSpeech({ role: "user", text });
       }
 
       setIsLoading(true);
@@ -205,35 +99,37 @@ export default function FridayPage() {
 
         const data = await res.json();
 
-        if (!res.ok) {
-          throw new Error(data.error || "Erro na comunicação com a API.");
-        }
+        if (!res.ok) throw new Error(data.error);
 
         if (data.conversationId && !conversationId) {
           setConversationId(data.conversationId);
           localStorage.setItem("friday_conversation_id", data.conversationId);
         }
 
+        // Process UI Actions (Modo Foco, Web Search Images, etc)
+        if (data.ui_actions && Array.isArray(data.ui_actions)) {
+            data.ui_actions.forEach((action: any) => {
+                if (action.name === "toggle_focus_mode") {
+                    setIsFocusMode(prev => !prev);
+                }
+                if (action.name === "web_search" && action.data?.images?.length > 0) {
+                    const newPanels = action.data.images.map((url: string, i: number) => ({
+                        id: crypto.randomUUID(),
+                        type: "image",
+                        url: url
+                    }));
+                    setPanels(prev => [...newPanels, ...prev].slice(0, 4)); // max 4 panels
+                }
+            });
+        }
+
         if (data.reply) {
-          const assistantMsg: Message = {
-            id: crypto.randomUUID(),
-            role: "assistant",
-            content: data.reply,
-            timestamp: new Date(),
-          };
-          setMessages((prev) => [...prev, assistantMsg]);
+          setLastSpeech({ role: "assistant", text: data.reply });
           speech.speak(data.reply);
         }
-      } catch {
-        setMessages((prev) => [
-          ...prev,
-          {
-            id: crypto.randomUUID(),
-            role: "assistant",
-            content: "Sistema offline. Verifique a conexão.",
-            timestamp: new Date(),
-          },
-        ]);
+      } catch (err) {
+        setLastSpeech({ role: "assistant", text: "Erro de conexão com o satélite primário, Senhor." });
+        speech.speak("Erro de conexão com o satélite primário, Senhor.");
       } finally {
         setIsLoading(false);
         proactive.resetSilenceTimer();
@@ -247,14 +143,13 @@ export default function FridayPage() {
 
   const speech = useSpeech({
     onTranscript: (text) => {
-      setInputText("");
       sendMessage(text);
     },
     onError: (err) => console.warn("[Speech]", err),
     lang: "pt-BR",
   });
 
-  // ── Proactive ─────────────────────────────────────────────────────────────
+  // ── Proactive & Alerts ──────────────────────────────────────────────────
 
   const proactive = useProactive({
     conversationId,
@@ -263,43 +158,19 @@ export default function FridayPage() {
     isActive: speech.state !== "idle" || isLoading,
     onProactiveMessage: (reply, convId) => {
       if (!conversationId) setConversationId(convId);
-      const msg: Message = {
-        id: crypto.randomUUID(),
-        role: "assistant",
-        content: reply,
-        timestamp: new Date(),
-        isProactive: true,
-      };
-      setMessages((prev) => [...prev, msg]);
+      setLastSpeech({ role: "assistant", text: reply });
       speech.speak(reply);
     },
   });
 
-  // ── Alerts ────────────────────────────────────────────────────────────────
-
   useAlerts({
     onAlertTriggered: (alert) => {
-      setAlertQueue((prev) => [alert, ...prev]);
-      // Sexta-feira announces the alert via TTS
-      const msg = `Sexta-feira aqui — alerta ativado: ${alert.label}`;
+      const msg = `Alerta ativado, Senhor: ${alert.label}`;
+      setLastSpeech({ role: "assistant", text: msg });
       speech.speak(msg);
-      const assistantMsg: Message = {
-        id: crypto.randomUUID(),
-        role: "assistant",
-        content: msg,
-        timestamp: new Date(),
-        isAlert: true,
-      };
-      setMessages((prev) => [...prev, assistantMsg]);
+      setPanels(prev => [{ id: crypto.randomUUID(), type: "alert", title: "ALERTA", content: alert.label }, ...prev].slice(0,4));
     },
   });
-
-  // ── Restore conversation ID ───────────────────────────────────────────────
-
-  useEffect(() => {
-    const stored = localStorage.getItem("friday_conversation_id");
-    if (stored) setConversationId(stored);
-  }, []);
 
   // ── Handlers ──────────────────────────────────────────────────────────────
 
@@ -314,28 +185,7 @@ export default function FridayPage() {
     }
   }, [micEnabled, speech]);
 
-  const handleTextSubmit = useCallback(
-    (e: React.FormEvent) => {
-      e.preventDefault();
-      if (!inputText.trim()) return;
-      sendMessage(inputText);
-      setInputText("");
-    },
-    [inputText, sendMessage]
-  );
-
-  const handleKeyDown = useCallback(
-    (e: React.KeyboardEvent) => {
-      if (e.key === "Enter" && !e.shiftKey) {
-        e.preventDefault();
-        handleTextSubmit(e as unknown as React.FormEvent);
-      }
-    },
-    [handleTextSubmit]
-  );
-
-  // ── Mic: re-trigger listening after speaking ──────────────────────────────
-
+  // Keep mic active
   useEffect(() => {
     if (micEnabled && speech.state === "idle" && !isLoading) {
       const t = setTimeout(() => speech.startListening(), 300);
@@ -343,274 +193,116 @@ export default function FridayPage() {
     }
   }, [micEnabled, speech.state, isLoading]);
 
+  // Restore ID
+  useEffect(() => {
+    const stored = localStorage.getItem("friday_conversation_id");
+    if (stored) setConversationId(stored);
+  }, []);
+
   // ── Render ────────────────────────────────────────────────────────────────
 
-  const isActive = speech.state !== "idle" || isLoading;
+  const themeColor = isFocusMode ? "#ff2a2a" : "#00f0ff";
+  const themeGlow = isFocusMode ? "rgba(255, 42, 42, 0.2)" : "rgba(0, 240, 255, 0.2)";
 
   return (
-    <div className="hud-grid flex flex-col h-screen relative overflow-hidden" style={{ background: "var(--midnight)" }}>
-      {/* Scan line */}
-      <div className="scan-line" />
-
-      {/* Corner decorations */}
-      <div className="absolute top-0 left-0 w-24 h-24 pointer-events-none">
-        <div className="absolute top-3 left-3 w-6 h-6 border-l border-t" style={{ borderColor: "var(--cyan-glow)", opacity: 0.4 }} />
-      </div>
-      <div className="absolute top-0 right-0 w-24 h-24 pointer-events-none">
-        <div className="absolute top-3 right-3 w-6 h-6 border-r border-t" style={{ borderColor: "var(--cyan-glow)", opacity: 0.4 }} />
-      </div>
-      <div className="absolute bottom-0 left-0 w-24 h-24 pointer-events-none">
-        <div className="absolute bottom-3 left-3 w-6 h-6 border-l border-b" style={{ borderColor: "var(--cyan-glow)", opacity: 0.4 }} />
-      </div>
-      <div className="absolute bottom-0 right-0 w-24 h-24 pointer-events-none">
-        <div className="absolute bottom-3 right-3 w-6 h-6 border-r border-b" style={{ borderColor: "var(--cyan-glow)", opacity: 0.4 }} />
+    <div className="relative w-screen h-screen overflow-hidden bg-black font-mono text-xs">
+        
+      {/* ── 3D Canvas Background ── */}
+      <div className="absolute inset-0 z-0">
+        <Canvas camera={{ position: [0, 0, 5], fov: 60 }}>
+          <ParticleSphere volume={speech.volume} isFocusMode={isFocusMode} isProcessing={isLoading || speech.state === "processing"} />
+        </Canvas>
       </div>
 
-      {/* ── Header ── */}
-      <header className="flex-none px-6 py-4 flex items-center justify-between border-b" style={{ borderColor: "var(--border-subtle)" }}>
-        <div>
-          <div className="font-display font-semibold text-lg tracking-wider glow-text" style={{ color: "var(--cyan-glow)" }}>
-            SEXTA-FEIRA
-          </div>
-          <div className="font-mono text-xs mt-0.5" style={{ color: "var(--text-secondary)" }}>
-            SYS_BUILD 0.1.0 · {conversationId ? `ID:${conversationId.slice(0, 8)}` : "NO_SESSION"}
-          </div>
-        </div>
-        <div className="flex items-center gap-4">
-          {/* Connection status */}
-          <div className="flex items-center gap-1.5">
-            <div className="w-1.5 h-1.5 rounded-full" style={{ background: "var(--cyan-glow)", boxShadow: "0 0 6px var(--cyan-glow)" }} />
-            <span className="font-mono text-xs" style={{ color: "var(--text-secondary)" }}>ONLINE</span>
-          </div>
-          {/* Waveform */}
-          <Waveform active={speech.state === "listening"} />
-        </div>
-      </header>
-
-      {/* ── Main Content ── */}
-      <main className="flex flex-1 overflow-hidden">
-
-        {/* ── Left Panel: Orb ── */}
-        <div className="flex-none w-72 flex flex-col items-center justify-center border-r gap-6 py-8" style={{ borderColor: "var(--border-subtle)" }}>
-          <FridayOrb state={speech.state} volume={speech.volume} />
-
-          {/* Mic toggle button */}
-          <button
-            onClick={handleMicToggle}
-            className="font-display font-medium text-sm tracking-widest uppercase px-6 py-2.5 rounded border transition-all duration-200"
-            style={{
-              borderColor: micEnabled ? "#ff4444" : "var(--cyan-glow)",
-              color: micEnabled ? "#ff4444" : "var(--cyan-glow)",
-              background: micEnabled ? "rgba(255,68,68,0.06)" : "rgba(0,240,255,0.06)",
-              boxShadow: micEnabled ? "0 0 15px rgba(255,68,68,0.2)" : "var(--glow-sm)",
-            }}
-          >
-            {micEnabled ? "◼ DESLIGAR MIC" : "⏺ ATIVAR MIC"}
-          </button>
-
-          {/* Status panel */}
-          <div
-            className="w-48 border rounded p-3 font-mono text-xs space-y-1.5"
-            style={{ borderColor: "var(--border-subtle)", background: "rgba(0,240,255,0.02)" }}
-          >
-            {[
-              ["ESTADO", speech.state.toUpperCase()],
-              ["MICROFONE", micEnabled ? "ATIVO" : "INATIVO"],
-              ["MSGS", String(messages.length)],
-              ["ALERTAS", String(alertQueue.length)],
-            ].map(([k, v]) => (
-              <div key={k} className="flex justify-between">
-                <span style={{ color: "var(--text-secondary)" }}>{k}</span>
-                <span style={{ color: "var(--cyan-glow)" }}>{v}</span>
-              </div>
-            ))}
-          </div>
-        </div>
-
-        {/* ── Right Panel: Conversation ── */}
-        <div className="flex-1 flex flex-col overflow-hidden">
-
-          {/* Alert queue */}
-          {alertQueue.length > 0 && (
-            <div className="flex-none p-4 border-b" style={{ borderColor: "var(--border-subtle)" }}>
-              {alertQueue.slice(0, 3).map((alert) => (
-                <AlertToast
-                  key={alert.id}
-                  alert={alert}
-                  onDismiss={() => setAlertQueue((prev) => prev.filter((a) => a.id !== alert.id))}
-                />
-              ))}
+      {/* ── HUD Overlay (Z-10) ── */}
+      <div className="absolute inset-0 z-10 pointer-events-none flex flex-col justify-between p-6">
+        
+        {/* Top Header */}
+        <header className="flex justify-between items-start">
+            <div>
+                <h1 className="font-display text-2xl tracking-[0.3em] font-bold" style={{ color: themeColor, textShadow: `0 0 10px ${themeColor}` }}>
+                    {isFocusMode ? "J.A.R.V.I.S // MODO FOCO" : "J.A.R.V.I.S // HUD"}
+                </h1>
+                <p className="tracking-widest opacity-60 mt-2" style={{ color: themeColor }}>
+                    SYS_BUILD 3.0.0 · {conversationId ? `SESSION:${conversationId.slice(0,8)}` : "NO_SESSION"}
+                </p>
             </div>
-          )}
-
-          {/* Messages */}
-          <div className="flex-1 overflow-y-auto px-6 py-4 space-y-4">
-            {messages.length === 0 && (
-              <div className="h-full flex items-center justify-center">
-                <div className="text-center space-y-3">
-                  <div className="font-mono text-xs tracking-widest" style={{ color: "var(--text-secondary)" }}>
-                    AGUARDANDO COMANDO
-                  </div>
-                  <div className="font-body text-sm" style={{ color: "var(--text-secondary)", maxWidth: 300 }}>
-                    Ative o microfone ou digite para iniciar uma conversa com a Sexta-feira.
-                  </div>
+            
+            <div className="text-right">
+                <div className="flex items-center gap-2 justify-end">
+                    <div className="w-2 h-2 rounded-full animate-pulse" style={{ backgroundColor: themeColor }} />
+                    <span style={{ color: themeColor }}>SYSTEM ONLINE</span>
                 </div>
-              </div>
-            )}
+                <p className="opacity-60 mt-2" style={{ color: themeColor }}>{new Date().toLocaleTimeString('pt-BR')}</p>
+            </div>
+        </header>
 
-            {messages.map((msg) => (
-              <div
-                key={msg.id}
-                className={`msg-enter flex gap-3 ${msg.role === "user" ? "justify-end" : "justify-start"}`}
-              >
-                {msg.role === "assistant" && (
-                  <div
-                    className="flex-none w-7 h-7 rounded-full flex items-center justify-center font-mono text-xs font-bold"
-                    style={{
-                      background: msg.isAlert ? "rgba(255,179,0,0.1)" : "rgba(0,240,255,0.08)",
-                      border: `1px solid ${msg.isAlert ? "var(--amber-alert)" : "var(--border-active)"}`,
-                      color: msg.isAlert ? "var(--amber-alert)" : "var(--cyan-glow)",
-                      fontSize: 9,
-                    }}
-                  >
-                    SF
-                  </div>
-                )}
-
-                <div
-                  className="max-w-md rounded-lg px-4 py-2.5 font-body text-sm leading-relaxed"
-                  style={
-                    msg.role === "user"
-                      ? {
-                          background: "rgba(0,240,255,0.08)",
-                          border: "1px solid rgba(0,240,255,0.2)",
-                          color: "var(--text-primary)",
-                        }
-                      : {
-                          background: msg.isAlert
-                            ? "rgba(255,179,0,0.04)"
-                            : msg.isProactive
-                            ? "rgba(170,128,255,0.06)"
-                            : "rgba(255,255,255,0.03)",
-                          border: `1px solid ${msg.isAlert ? "rgba(255,179,0,0.2)" : msg.isProactive ? "rgba(170,128,255,0.2)" : "var(--border-subtle)"}`,
-                          color: "var(--text-primary)",
-                        }
-                  }
-                >
-                  {msg.isProactive && (
-                    <div className="font-mono text-xs mb-1" style={{ color: "rgba(170,128,255,0.7)", fontSize: 9 }}>
-                      PROATIVO
-                    </div>
-                  )}
-                  {msg.content}
-                  <div
-                    className="font-mono mt-1"
-                    style={{ color: "var(--text-secondary)", fontSize: 9 }}
-                  >
-                    {msg.timestamp.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}
-                  </div>
-                </div>
-
-                {msg.role === "user" && (
-                  <div
-                    className="flex-none w-7 h-7 rounded-full flex items-center justify-center font-mono"
-                    style={{
-                      background: "rgba(0,240,255,0.06)",
-                      border: "1px solid rgba(0,240,255,0.15)",
-                      color: "var(--text-secondary)",
-                      fontSize: 9,
-                    }}
-                  >
-                    USR
-                  </div>
-                )}
-              </div>
-            ))}
-
-            {/* Processing indicator */}
-            {isLoading && (
-              <div className="flex gap-3 justify-start msg-enter">
-                <div
-                  className="flex-none w-7 h-7 rounded-full flex items-center justify-center font-mono"
-                  style={{
-                    background: "rgba(0,240,255,0.08)",
-                    border: "1px solid var(--border-active)",
-                    color: "var(--cyan-glow)",
-                    fontSize: 9,
-                  }}
-                >
-                  SF
-                </div>
-                <div
-                  className="rounded-lg px-4 py-2.5 font-mono text-xs flex items-center gap-2"
-                  style={{
-                    background: "rgba(255,255,255,0.03)",
-                    border: "1px solid var(--border-subtle)",
-                    color: "var(--cyan-dim)",
-                  }}
-                >
-                  <Waveform active={true} color="var(--cyan-glow)" />
-                  PROCESSANDO
-                </div>
-              </div>
-            )}
-
-            <div ref={messagesEndRef} />
-          </div>
-
-          {/* ── Text Input ── */}
-          <div
-            className="flex-none px-4 py-3 border-t"
-            style={{ borderColor: "var(--border-subtle)", background: "rgba(0,0,0,0.3)" }}
-          >
-            <form onSubmit={handleTextSubmit} className="flex gap-2 items-center">
-              <input
-                ref={inputRef}
-                type="text"
-                value={inputText}
-                onChange={(e) => setInputText(e.target.value)}
-                onKeyDown={handleKeyDown}
-                placeholder="Digite um comando ou pergunta..."
-                className="flex-1 bg-transparent font-body text-sm outline-none px-3 py-2 rounded border transition-colors"
-                style={{
-                  borderColor: "var(--border-subtle)",
-                  color: "var(--text-primary)",
-                  caretColor: "var(--cyan-glow)",
-                }}
-                onFocus={(e) => (e.target.style.borderColor = "var(--border-active)")}
-                onBlur={(e) => (e.target.style.borderColor = "var(--border-subtle)")}
-                disabled={isLoading}
-              />
-              <button
-                type="submit"
-                disabled={!inputText.trim() || isLoading}
-                className="font-display font-medium text-xs tracking-wider uppercase px-4 py-2 rounded border transition-all disabled:opacity-30"
-                style={{
-                  borderColor: "var(--cyan-glow)",
-                  color: "var(--cyan-glow)",
-                  background: "rgba(0,240,255,0.06)",
-                }}
-              >
-                ENVIAR
-              </button>
-              {speech.state === "speaking" && (
-                <button
-                  type="button"
-                  onClick={speech.cancelSpeech}
-                  className="font-display font-medium text-xs tracking-wider uppercase px-3 py-2 rounded border transition-all"
-                  style={{
-                    borderColor: "#ff4444",
-                    color: "#ff4444",
-                    background: "rgba(255,68,68,0.06)",
-                  }}
-                >
-                  PARAR
-                </button>
-              )}
-            </form>
-          </div>
+        {/* Floating Panels Area */}
+        <div className="absolute top-32 left-8 w-64 space-y-6">
+            <AnimatePresence>
+                {panels.map((panel, idx) => (
+                    <motion.div
+                        key={panel.id}
+                        initial={{ opacity: 0, x: -50, scale: 0.9 }}
+                        animate={{ opacity: 1, x: 0, scale: 1 }}
+                        exit={{ opacity: 0, scale: 0.8 }}
+                        className="p-3 border bg-black/40 backdrop-blur-md rounded pointer-events-auto"
+                        style={{ borderColor: themeGlow, boxShadow: `0 0 15px ${themeGlow}` }}
+                    >
+                        {panel.type === "image" && (
+                            // eslint-disable-next-line @next/next/no-img-element
+                            <img src={panel.url} alt="Pesquisa" className="w-full h-32 object-cover rounded opacity-80 mix-blend-screen" />
+                        )}
+                        {panel.type === "alert" && (
+                            <div className="text-center p-2">
+                                <div style={{ color: "#ffb300" }} className="mb-2 uppercase font-bold tracking-widest">{panel.title}</div>
+                                <div className="text-white opacity-80">{panel.content}</div>
+                            </div>
+                        )}
+                    </motion.div>
+                ))}
+            </AnimatePresence>
         </div>
-      </main>
+
+        {/* Bottom Subtitles & Controls */}
+        <footer className="w-full flex flex-col items-center pb-8 gap-6">
+            {/* Subtitles (Last spoken message) */}
+            <AnimatePresence mode="wait">
+                {lastSpeech && (
+                    <motion.div
+                        key={lastSpeech.text}
+                        initial={{ opacity: 0, y: 10 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        exit={{ opacity: 0, y: -10 }}
+                        className="max-w-3xl text-center backdrop-blur-sm bg-black/30 p-4 rounded-xl border"
+                        style={{ 
+                            borderColor: themeGlow,
+                            color: lastSpeech.role === "assistant" ? themeColor : "white" 
+                        }}
+                    >
+                        <span className="uppercase opacity-50 tracking-widest text-[9px] block mb-2">
+                            {lastSpeech.role === "assistant" ? "SISTEMA" : "SENHOR"}
+                        </span>
+                        <p className="text-lg font-body leading-relaxed">{lastSpeech.text}</p>
+                    </motion.div>
+                )}
+            </AnimatePresence>
+
+            {/* Mic Control */}
+            <button
+                onClick={handleMicToggle}
+                className="pointer-events-auto px-12 py-3 uppercase tracking-[0.2em] font-bold transition-all"
+                style={{
+                    backgroundColor: micEnabled ? themeGlow : "transparent",
+                    color: themeColor,
+                    border: `1px solid ${themeColor}`,
+                    boxShadow: micEnabled ? `0 0 20px ${themeGlow}` : "none"
+                }}
+            >
+                {micEnabled ? "Microfone Ativo" : "Iniciar Escuta"}
+            </button>
+        </footer>
+      </div>
     </div>
   );
 }

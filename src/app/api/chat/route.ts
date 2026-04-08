@@ -6,6 +6,8 @@ import {
   getOrCreateConversation,
   createAlert,
 } from "@/lib/supabase";
+import fs from "fs/promises";
+import path from "path";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -14,30 +16,42 @@ const CONTEXT_WINDOW = parseInt(process.env.CONTEXT_WINDOW_SIZE ?? "20");
 
 // ── Web Search Tool Implementation ───────────────────────────────────────────
 
-async function performWebSearch(query: string, numResults = 5): Promise<string> {
+async function performWebSearch(query: string, numResults = 5): Promise<any> {
   try {
-    const url = `https://api.search.brave.com/res/v1/web/search?q=${encodeURIComponent(query)}&count=${numResults}`;
-    const res = await fetch(url, {
-      headers: {
-        "Accept": "application/json",
-        "Accept-Encoding": "gzip",
-        "X-Subscription-Token": process.env.BRAVE_SEARCH_API_KEY ?? "",
-      },
-    });
+    const webUrl = `https://api.search.brave.com/res/v1/web/search?q=${encodeURIComponent(query)}&count=${numResults}`;
+    const imgUrl = `https://api.search.brave.com/res/v1/images/search?q=${encodeURIComponent(query)}&count=3`;
+    
+    const headers = {
+      "Accept": "application/json",
+      "X-Subscription-Token": process.env.BRAVE_SEARCH_API_KEY ?? "",
+    };
 
-    if (!res.ok) {
-      return `[Busca indisponível para: "${query}". Responda com base no seu conhecimento.]`;
+    const [webRes, imgRes] = await Promise.all([
+      fetch(webUrl, { headers }),
+      fetch(imgUrl, { headers })
+    ]);
+
+    let snippet = `[Busca web indisponível para "${query}"]`;
+    let images: string[] = [];
+
+    if (webRes.ok) {
+        const data = await webRes.json();
+        const results = (data.web?.results ?? []).slice(0, numResults);
+        snippet = results
+          .map((r: { title: string; description: string; url: string }) =>
+            `Título: ${r.title}\nResumo: ${r.description}\nURL: ${r.url}`
+          )
+          .join("\n\n---\n\n");
+    }
+    
+    if (imgRes.ok) {
+        const imgData = await imgRes.json();
+        images = (imgData.results ?? []).slice(0, 3).map((r: any) => r.properties.url);
     }
 
-    const data = await res.json();
-    const results = (data.web?.results ?? []).slice(0, numResults);
-    return results
-      .map((r: { title: string; description: string; url: string }) =>
-        `Título: ${r.title}\nResumo: ${r.description}\nURL: ${r.url}`
-      )
-      .join("\n\n---\n\n");
+    return { snippet, images };
   } catch {
-    return `[Erro ao buscar: "${query}"]`;
+    return { snippet: `[Erro ao buscar: "${query}"]`, images: [] };
   }
 }
 
@@ -48,35 +62,64 @@ async function executeTool(
   functionArgs: Record<string, any>,
   conversationId?: string
 ): Promise<any> {
-  switch (functionName) {
-    case "web_search": {
-      const query = functionArgs.query as string;
-      const num = (functionArgs.num_results as number) ?? 5;
-      const snippet = await performWebSearch(query, num);
-      return { result: snippet };
-    }
-    case "create_alert": {
-      let parsedCondition = {};
-      try {
-        parsedCondition = typeof functionArgs.condition_json === 'string' 
-          ? JSON.parse(functionArgs.condition_json) 
-          : functionArgs.condition_json;
-      } catch (e) {
-        parsedCondition = { raw: functionArgs.condition_json };
+  try {
+    switch (functionName) {
+      case "web_search": {
+        const query = functionArgs.query as string;
+        const num = (functionArgs.num_results as number) ?? 5;
+        const result = await performWebSearch(query, num);
+        return result; 
       }
+      case "create_alert": {
+        let parsedCondition = {};
+        try {
+          parsedCondition = typeof functionArgs.condition_json === 'string' 
+            ? JSON.parse(functionArgs.condition_json) 
+            : functionArgs.condition_json;
+        } catch (e) {
+          parsedCondition = { raw: functionArgs.condition_json };
+        }
 
-      const alert = await createAlert(
-        functionArgs.label as string,
-        functionArgs.type as string,
-        parsedCondition,
-        conversationId
-      );
-      return { success: true, alert_id: alert.id, label: alert.label };
+        const alert = await createAlert(
+          functionArgs.label as string,
+          functionArgs.type as string,
+          parsedCondition,
+          conversationId
+        );
+        return { success: true, alert_id: alert.id, label: alert.label };
+      }
+      case "get_current_time": {
+        const now = new Date();
+        return {
+          current_time: now.toLocaleTimeString("pt-BR"),
+          current_date: now.toLocaleDateString("pt-BR"),
+          timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+        };
+      }
+      case "read_local_file": {
+        const safePath = path.resolve(process.cwd(), functionArgs.path);
+        // Proteção para não sair do diretório do app
+        if (!safePath.startsWith(process.cwd())) return { error: "Acesso negado fora do diretório master" };
+        const content = await fs.readFile(safePath, "utf-8");
+        return { content: content.slice(0, 3000) + (content.length > 3000 ? "...(truncado)" : "") };
+      }
+      case "write_local_file": {
+        const safePath = path.resolve(process.cwd(), functionArgs.path);
+        if (!safePath.startsWith(process.cwd())) return { error: "Acesso negado fora do diretório master" };
+        await fs.writeFile(safePath, functionArgs.content as string, "utf-8");
+        return { success: true, message: "Arquivo escrito com sucesso.", path: safePath };
+      }
+      case "toggle_focus_mode": {
+        return { action: "focus_mode_toggled", ui_triggered: true };
+      }
+      default:
+        return { error: `Ferramenta desconhecida: ${functionName}` };
     }
-    default:
-      return { error: `Ferramenta desconhecida: ${functionName}` };
+  } catch (err: any) {
+    return { error: `Falha na execução: ${err.message}` };
   }
 }
+
 
 // ── POST Handler ──────────────────────────────────────────────────────────────
 
@@ -120,10 +163,10 @@ export async function POST(req: NextRequest) {
     });
 
     let finalResponse = "";
+    let ui_actions: any[] = [];
     
     // Send the user message
     let result = await chat.sendMessage(message);
-
     // Agentic Loop for Function Calling
     while (true) {
       const functionCalls = result.response.functionCalls();
@@ -133,6 +176,10 @@ export async function POST(req: NextRequest) {
         const functionResponses = await Promise.all(
           functionCalls.map(async (call) => {
             const apiResult = await executeTool(call.name, call.args, conversationId);
+            
+            // Push actionable data to UI
+            ui_actions.push({ name: call.name, data: apiResult });
+
             return {
               functionResponse: {
                 name: call.name,
@@ -156,6 +203,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({
       reply: finalResponse,
       conversationId,
+      ui_actions
     });
   } catch (err: any) {
     console.error("[/api/chat] Error:", err.message || err);
