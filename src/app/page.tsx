@@ -83,22 +83,20 @@ function ParticleSphere({ volume, isFocusMode, isProcessing }: { volume: number;
     groupRef.current.rotation.y -= delta / (isProcessing ? 3 : 6);
     
     // Explosion Effect: Scale jumps extremely aggressively with volume
-    const jump = isProcessing ? 0.3 : 0;
-    const explosiveVol = Math.pow(volume, 1.5) * 4; // Non-linear amplification
-    const targetScale = 1.0 + explosiveVol + jump; 
+    const explosiveVol = Math.pow(volume, 2.0) * 8; // Massive nonlinear amplification
+    const targetScale = 1.0 + explosiveVol + (isProcessing ? 0.5 : 0);
     
     const currentScale = groupRef.current.scale.x;
-    // Faster snapping out, slower decay back in for "explosive" stutter
-    const lerpSpeed = targetScale > currentScale ? 0.4 : 0.08;
+    const lerpSpeed = targetScale > currentScale ? 0.3 : 0.05;
     
     const newScale = currentScale + (targetScale - currentScale) * lerpSpeed;
     groupRef.current.scale.set(newScale, newScale, newScale);
     
-    // Slight mouse interaction to the core sphere too
-    const targetX = state.mouse.x * 0.5;
-    const targetY = state.mouse.y * 0.5;
-    groupRef.current.position.x += (targetX - groupRef.current.position.x) * 0.05;
-    groupRef.current.position.y += (targetY - groupRef.current.position.y) * 0.05;
+    // Core interaction with mouse pointer
+    const targetX = state.mouse.x * 2;
+    const targetY = state.mouse.y * 2;
+    groupRef.current.position.x += (targetX - groupRef.current.position.x) * 0.1;
+    groupRef.current.position.y += (targetY - groupRef.current.position.y) * 0.1;
   });
 
   const baseColor = isFocusMode ? "#ff0000" : isProcessing ? "#9933ff" : "#00d4ff";
@@ -266,8 +264,9 @@ export default function FridayHUD() {
     <div className="relative w-screen h-screen overflow-hidden bg-black font-mono text-xs selection:bg-cyan-500/30">
         
       {/* ── 3D Canvas Background ── */}
-      <div className="absolute inset-0 z-0">
-        <Canvas camera={{ position: [0, 0, 10], fov: 60 }} gl={{ antialias: true }}>
+      <div className="absolute inset-0 z-0 w-full h-full">
+        <Canvas camera={{ position: [0, 0, 10], fov: 75 }} gl={{ antialias: true, alpha: false }} style={{ width: '100%', height: '100%' }}>
+          <color attach="background" args={["#000000"]} />
           <BackgroundAtoms isFocusMode={isFocusMode} />
           <ParticleSphere volume={speech.volume} isFocusMode={isFocusMode} isProcessing={isLoading || speech.state === "processing"} />
           <EffectComposer>
@@ -340,22 +339,22 @@ export default function FridayHUD() {
         </div>
 
         {/* Central Subtitles & Controls */}
-        <footer className="w-full flex flex-col items-center pb-12 gap-8 relative z-20">
+        <footer className="w-full flex flex-col items-center justify-end pb-12 gap-8 relative z-20 h-full">
             {/* Holographic Subtitles */}
             <AnimatePresence mode="wait">
                 {lastSpeech && (
                     <motion.div
                         key={lastSpeech.text}
-                        initial={{ opacity: 0, scale: 0.9, filter: "blur(5px)" }}
-                        animate={{ opacity: 1, scale: 1, filter: "blur(0px)" }}
-                        exit={{ opacity: 0, y: 20, filter: "blur(5px)" }}
-                        className="max-w-4xl text-center px-12 py-4"
+                        initial={{ opacity: 0, scale: 0.9, filter: "blur(10px)", y: 20 }}
+                        animate={{ opacity: 1, scale: 1, filter: "blur(0px)", y: 0 }}
+                        exit={{ opacity: 0, y: 20, filter: "blur(10px)" }}
+                        className="max-w-4xl text-center px-12 py-6 bg-transparent"
                     >
-                        <span className="uppercase tracking-[0.3em] font-black text-[10px] block mb-3" style={{ color: lastSpeech.role === "assistant" ? themeColor : "#fff", opacity: 0.7, textShadow: `0 0 10px ${lastSpeech.role === "assistant" ? themeColor : "#fff"}` }}>
+                        <span className="uppercase tracking-[0.4em] font-black text-xs block mb-4" style={{ color: lastSpeech.role === "assistant" ? themeColor : "#fff", opacity: 0.9, textShadow: `0 0 15px ${lastSpeech.role === "assistant" ? themeColor : "#fff"}` }}>
                             {lastSpeech.role === "assistant" ? "SEXTA-FEIRA" : "SENHOR"}
                         </span>
-                        <p className="text-2xl font-body leading-relaxed font-semibold tracking-wide mix-blend-screen" 
-                           style={{ color: lastSpeech.role === "assistant" ? themeColor : "#ffffff", textShadow: `0 0 15px ${lastSpeech.role === "assistant" ? themeColor : "#aaaaaa"}` }}>
+                        <p className="text-3xl font-body leading-relaxed font-bold tracking-widest drop-shadow-2xl" 
+                           style={{ color: lastSpeech.role === "assistant" ? themeColor : "#ffffff", textShadow: `0 0 20px ${lastSpeech.role === "assistant" ? themeColor : "#ffffff"}, 0 0 40px ${themeGlow}` }}>
                             "{lastSpeech.text}"
                         </p>
                     </motion.div>
