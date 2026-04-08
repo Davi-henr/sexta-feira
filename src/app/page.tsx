@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState, useMemo } from "react";
 import { Canvas, useFrame } from "@react-three/fiber";
 import { Points, PointMaterial } from "@react-three/drei";
+import { EffectComposer, Bloom } from "@react-three/postprocessing";
 import { useSpeech } from "@/hooks/useSpeech";
 import { useProactive } from "@/hooks/useProactive";
 import { useAlerts } from "@/hooks/useAlerts";
@@ -12,10 +13,13 @@ import { motion, AnimatePresence } from "framer-motion";
 // ── 3D Particle Sphere ────────────────────────────────────────────────────────
 
 function ParticleSphere({ volume, isFocusMode, isProcessing }: { volume: number; isFocusMode: boolean; isProcessing: boolean }) {
+  const numParticles = 40000; // MUCH denser for pure hologram feel
+  
   const points = useMemo(() => {
-    const p = new Float32Array(5000 * 3);
-    for (let i = 0; i < 5000; i++) {
-        const r = 2;
+    const p = new Float32Array(numParticles * 3);
+    for (let i = 0; i < numParticles; i++) {
+        // Create a perfect hollow sphere core + scattered particles
+        const r = Math.random() > 0.8 ? 3.5 + Math.random() * 0.5 : 3.5; 
         const theta = 2 * Math.PI * Math.random();
         const phi = Math.acos(2 * Math.random() - 1);
         p[i * 3] = r * Math.sin(phi) * Math.cos(theta);
@@ -29,17 +33,17 @@ function ParticleSphere({ volume, isFocusMode, isProcessing }: { volume: number;
 
   useFrame((state, delta) => {
     if (!ref.current) return;
-    ref.current.rotation.x -= delta / (isProcessing ? 5 : 10);
-    ref.current.rotation.y -= delta / (isProcessing ? 8 : 15);
+    ref.current.rotation.x -= delta / (isProcessing ? 2 : 5);
+    ref.current.rotation.y -= delta / (isProcessing ? 3 : 8);
     
-    // Scale jumps with volume
-    const targetScale = 1 + volume * 1.5;
+    // Scale jumps with volume, much larger central sphere
+    const targetScale = 1.2 + volume * 2.5; 
     const currentScale = ref.current.scale.x;
-    const newScale = currentScale + (targetScale - currentScale) * 0.2;
+    const newScale = currentScale + (targetScale - currentScale) * 0.15;
     ref.current.scale.set(newScale, newScale, newScale);
   });
 
-  const color = isFocusMode ? "#ff2a2a" : isProcessing ? "#aa80ff" : "#00f0ff";
+  const color = isFocusMode ? "#ff1a1a" : isProcessing ? "#8a2be2" : "#00f0ff";
 
   return (
     <group rotation={[0, 0, Math.PI / 4]}>
@@ -47,10 +51,10 @@ function ParticleSphere({ volume, isFocusMode, isProcessing }: { volume: number;
         <PointMaterial 
             transparent 
             color={color} 
-            size={0.03} 
+            size={0.012} 
             sizeAttenuation={true} 
             depthWrite={false} 
-            opacity={0.6 + (volume * 0.4)} 
+            opacity={0.8} 
         />
       </Points>
     </group>
@@ -118,7 +122,7 @@ export default function FridayHUD() {
                         type: "image",
                         url: url
                     }));
-                    setPanels(prev => [...newPanels, ...prev].slice(0, 4)); // max 4 panels
+                    setPanels(prev => [...newPanels, ...prev].slice(0, 5)); // max 5 panels
                 }
             });
         }
@@ -128,8 +132,8 @@ export default function FridayHUD() {
           speech.speak(data.reply);
         }
       } catch (err) {
-        setLastSpeech({ role: "assistant", text: "Erro de conexão com o satélite primário, Senhor." });
-        speech.speak("Erro de conexão com o satélite primário, Senhor.");
+        setLastSpeech({ role: "assistant", text: "Me desculpe Senhor. O link temporal de Quota do Google recusou a conexão por limite de requisições. Tente em 1 minuto." });
+        speech.speak("Me desculpe Senhor. O link temporal de Quota do Google recusou a conexão por limite de requisições.");
       } finally {
         setIsLoading(false);
         proactive.resetSilenceTimer();
@@ -168,7 +172,7 @@ export default function FridayHUD() {
       const msg = `Alerta ativado, Senhor: ${alert.label}`;
       setLastSpeech({ role: "assistant", text: msg });
       speech.speak(msg);
-      setPanels(prev => [{ id: crypto.randomUUID(), type: "alert", title: "ALERTA", content: alert.label }, ...prev].slice(0,4));
+      setPanels(prev => [{ id: crypto.randomUUID(), type: "alert", title: "ALERTA", content: alert.label }, ...prev].slice(0,5));
     },
   });
 
@@ -201,44 +205,47 @@ export default function FridayHUD() {
 
   // ── Render ────────────────────────────────────────────────────────────────
 
-  const themeColor = isFocusMode ? "#ff2a2a" : "#00f0ff";
-  const themeGlow = isFocusMode ? "rgba(255, 42, 42, 0.2)" : "rgba(0, 240, 255, 0.2)";
+  const themeColor = isFocusMode ? "#ff1a1a" : "#00f0ff";
+  const themeGlow = isFocusMode ? "rgba(255, 26, 26, 0.4)" : "rgba(0, 240, 255, 0.4)";
 
   return (
     <div className="relative w-screen h-screen overflow-hidden bg-black font-mono text-xs">
         
       {/* ── 3D Canvas Background ── */}
-      <div className="absolute inset-0 z-0">
-        <Canvas camera={{ position: [0, 0, 5], fov: 60 }}>
+      <div className="absolute inset-0 z-0 flex items-center justify-center">
+        <Canvas camera={{ position: [0, 0, 8], fov: 60 }} gl={{ antialias: true }}>
           <ParticleSphere volume={speech.volume} isFocusMode={isFocusMode} isProcessing={isLoading || speech.state === "processing"} />
+          <EffectComposer>
+            <Bloom luminanceThreshold={0.1} luminanceSmoothing={0.9} intensity={2.0} />
+          </EffectComposer>
         </Canvas>
       </div>
 
       {/* ── HUD Overlay (Z-10) ── */}
-      <div className="absolute inset-0 z-10 pointer-events-none flex flex-col justify-between p-6">
+      <div className="absolute inset-0 z-10 pointer-events-none flex flex-col justify-between p-8">
         
         {/* Top Header */}
         <header className="flex justify-between items-start">
             <div>
-                <h1 className="font-display text-2xl tracking-[0.3em] font-bold" style={{ color: themeColor, textShadow: `0 0 10px ${themeColor}` }}>
-                    {isFocusMode ? "J.A.R.V.I.S // MODO FOCO" : "J.A.R.V.I.S // HUD"}
+                <h1 className="font-display text-4xl tracking-[0.4em] font-black" style={{ color: themeColor, textShadow: `0 0 15px ${themeColor}` }}>
+                    {isFocusMode ? "SEXTA-FEIRA // MODO FOCO" : "SEXTA-FEIRA"}
                 </h1>
-                <p className="tracking-widest opacity-60 mt-2" style={{ color: themeColor }}>
+                <p className="tracking-widest opacity-80 mt-3 text-sm" style={{ color: themeColor }}>
                     SYS_BUILD 3.0.0 · {conversationId ? `SESSION:${conversationId.slice(0,8)}` : "NO_SESSION"}
                 </p>
             </div>
             
             <div className="text-right">
-                <div className="flex items-center gap-2 justify-end">
-                    <div className="w-2 h-2 rounded-full animate-pulse" style={{ backgroundColor: themeColor }} />
-                    <span style={{ color: themeColor }}>SYSTEM ONLINE</span>
+                <div className="flex items-center gap-3 justify-end text-sm">
+                    <div className="w-3 h-3 rounded-full animate-pulse" style={{ backgroundColor: themeColor, boxShadow: `0 0 10px ${themeColor}` }} />
+                    <span style={{ color: themeColor }} className="font-bold tracking-widest">SYSTEM ONLINE</span>
                 </div>
-                <p className="opacity-60 mt-2" style={{ color: themeColor }}>{new Date().toLocaleTimeString('pt-BR')}</p>
+                <p className="opacity-80 mt-2 text-sm" style={{ color: themeColor }}>{new Date().toLocaleTimeString('pt-BR')}</p>
             </div>
         </header>
 
         {/* Floating Panels Area */}
-        <div className="absolute top-32 left-8 w-64 space-y-6">
+        <div className="absolute top-1/4 left-10 w-72 space-y-8">
             <AnimatePresence>
                 {panels.map((panel, idx) => (
                     <motion.div
