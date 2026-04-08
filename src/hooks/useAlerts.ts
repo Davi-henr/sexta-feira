@@ -22,6 +22,11 @@ export function useAlerts({ onAlertTriggered, pollIntervalMs = 15_000 }: UseAler
 
   // ── Fetch triggered alerts ────────────────────────────────────────────────
 
+  const onAlertTriggeredRef = useRef(onAlertTriggered);
+  useEffect(() => {
+    onAlertTriggeredRef.current = onAlertTriggered;
+  }, [onAlertTriggered]);
+
   const fetchTriggered = useCallback(async () => {
     try {
       const res = await fetch("/api/alerts");
@@ -32,14 +37,14 @@ export function useAlerts({ onAlertTriggered, pollIntervalMs = 15_000 }: UseAler
       // Only notify for new alerts not yet dismissed
       alerts.forEach((alert) => {
         if (!dismissedRef.current.has(alert.id)) {
-          onAlertTriggered(alert);
+          onAlertTriggeredRef.current(alert);
           dismissedRef.current.add(alert.id); // Don't notify twice
         }
       });
     } catch (err) {
       console.error("[useAlerts] Poll error:", err);
     }
-  }, [onAlertTriggered]);
+  }, []);
 
   // ── Dismiss an alert ──────────────────────────────────────────────────────
 
@@ -78,7 +83,7 @@ export function useAlerts({ onAlertTriggered, pollIntervalMs = 15_000 }: UseAler
         (payload) => {
           const alert = payload.new as DBAlert;
           if (!dismissedRef.current.has(alert.id)) {
-            onAlertTriggered(alert);
+            onAlertTriggeredRef.current(alert);
             setActiveAlerts((prev) => {
               if (prev.find((a) => a.id === alert.id)) return prev;
               return [alert, ...prev];
@@ -102,7 +107,7 @@ export function useAlerts({ onAlertTriggered, pollIntervalMs = 15_000 }: UseAler
       supabase.removeChannel(channel);
       if (pollRef.current) clearInterval(pollRef.current);
     };
-  }, [fetchTriggered, onAlertTriggered, pollIntervalMs]);
+  }, [fetchTriggered, pollIntervalMs]);
 
   return { activeAlerts, dismissAlert };
 }

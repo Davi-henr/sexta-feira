@@ -204,6 +204,11 @@ export default function FridayPage() {
         });
 
         const data = await res.json();
+
+        if (!res.ok) {
+          throw new Error(data.error || "Erro na comunicação com a API.");
+        }
+
         if (data.conversationId && !conversationId) {
           setConversationId(data.conversationId);
           localStorage.setItem("friday_conversation_id", data.conversationId);
