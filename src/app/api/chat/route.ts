@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { genAI, MODEL_NAME, FRIDAY_SYSTEM_PROMPT, FRIDAY_TOOLS, LLMMessage } from "@/lib/gemini";
+import { groq, MODEL_NAME, FRIDAY_SYSTEM_PROMPT, FRIDAY_TOOLS, LLMMessage } from "@/lib/groq";
 import {
   fetchRecentMessages,
   saveMessage,
@@ -135,8 +135,8 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Mensagem vazia." }, { status: 400 });
     }
 
-    if (!process.env.GEMINI_API_KEY) {
-       return NextResponse.json({ error: "Chave da API do Gemini não configurada no servidor." }, { status: 500 });
+    if (!process.env.GROQ_API_KEY) {
+       return NextResponse.json({ error: "Chave da API da Groq não configurada no servidor." }, { status: 500 });
     }
 
     const conversation = await getOrCreateConversation(incomingConvId);
@@ -146,54 +146,64 @@ export async function POST(req: NextRequest) {
 
     const history = await fetchRecentMessages(conversationId, CONTEXT_WINDOW);
 
-    // Map history to Gemini format
-    const geminiHistory = history.map((m) => ({
-      role: m.role === "assistant" ? "model" : "user",
-      parts: [{ text: m.content }],
-    }));
-
-    const model = genAI.getGenerativeModel({
-      model: MODEL_NAME,
-      systemInstruction: FRIDAY_SYSTEM_PROMPT,
-      tools: FRIDAY_TOOLS,
-    });
-
-    const chat = model.startChat({
-      history: geminiHistory,
-    });
+    // Map history to Groq format
+    const groqHistory: any[] = [
+      { role: "system", content: FRIDAY_SYSTEM_PROMPT },
+      ...history.map((m) => ({
+        role: m.role, // 'user' or 'assistant'
+        content: m.content,
+      }))
+    ];
+    
+    groqHistory.push({ role: "user", content: message });
 
     let finalResponse = "";
     let ui_actions: any[] = [];
     
-    // Send the user message
-    let result = await chat.sendMessage(message);
     // Agentic Loop for Function Calling
     while (true) {
-      const functionCalls = result.response.functionCalls();
-      
-      if (functionCalls && functionCalls.length > 0) {
+      const response = await groq.chat.completions.create({
+        model: MODEL_NAME,
+        messages: groqHistory,
+        tools: FRIDAY_TOOLS,
+        tool_choice: "auto",
+        max_completion_tokens: 1024,
+      });
+
+      const responseMessage = response.choices[0]?.message;
+      const toolCalls = responseMessage?.tool_calls;
+
+      if (toolCalls && toolCalls.length > 0) {
+        // Push the assistant's message containing tool_calls
+        groqHistory.push(responseMessage);
+        
         // Execute all functions in parallel
-        const functionResponses = await Promise.all(
-          functionCalls.map(async (call) => {
-            const apiResult = await executeTool(call.name, call.args, conversationId);
+        await Promise.all(
+          toolCalls.map(async (toolCall) => {
+            let parsedArgs = {};
+            try {
+               parsedArgs = JSON.parse(toolCall.function.arguments);
+            } catch (e) {
+               console.warn("Failed to parse tool args", toolCall.function.arguments);
+            }
+
+            const apiResult = await executeTool(toolCall.function.name, parsedArgs, conversationId);
             
             // Push actionable data to UI
-            ui_actions.push({ name: call.name, data: apiResult });
+            ui_actions.push({ name: toolCall.function.name, data: apiResult });
 
-            return {
-              functionResponse: {
-                name: call.name,
-                response: apiResult,
-              },
-            };
+            // Push result back to history
+            groqHistory.push({
+              tool_call_id: toolCall.id,
+              role: "tool",
+              name: toolCall.function.name,
+              content: JSON.stringify(apiResult),
+            });
           })
         );
-        
-        // Feed the results back to the model
-        result = await chat.sendMessage(functionResponses);
       } else {
         // No more function calls, we have our text answer
-        finalResponse = result.response.text();
+        finalResponse = responseMessage?.content || "Erro no processamento da Matriz Groq.";
         break;
       }
     }
