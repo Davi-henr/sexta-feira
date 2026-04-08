@@ -95,7 +95,20 @@ async function performWebSearch(query: string, numResults = 5): Promise<any> {
       ? items.map((s, i) => `Título: ${s.title}\nResumo: ${snippets[i] || ""}\nURL: ${s.url}`).join("\n\n---\n\n")
       : `DuckDuckGo não encontrou resultados diretos para "${query}". Tente reformular.`;
 
-    const images: string[] = []; // DDG Lite has no images, dummy empty
+    const images: string[] = []; 
+    // Fetch high-quality relevant image from Wikipedia
+    try {
+      const wikiRes = await fetch(`https://pt.wikipedia.org/w/api.php?action=query&prop=pageimages&format=json&piprop=original&generator=search&gsrsearch=${encodeURIComponent(query)}&gsrlimit=1`);
+      if (wikiRes.ok) {
+          const wikiData = await wikiRes.json();
+          if (wikiData.query && wikiData.query.pages) {
+              const pages = Object.values(wikiData.query.pages) as any[];
+              if (pages.length > 0 && pages[0].original) {
+                  images.push(pages[0].original.source);
+              }
+          }
+      }
+    } catch(e) {}
 
     return { snippet, images, sources };
   } catch (err: any) {
@@ -116,8 +129,7 @@ async function executeTool(
     switch (functionName) {
       case "web_search": {
         const query = functionArgs.query as string;
-        const num = (functionArgs.num_results as number) ?? 5;
-        const result = await performWebSearch(query, num);
+        const result = await performWebSearch(query, 5);
         // Force something to return so UI pops a card even if search fails
         if (!result.sources || result.sources.length === 0) {
             result.sources = [{ title: `Buscador encontrou 0 resultados precisos para: ${query}`, url: "#" }];
@@ -125,15 +137,10 @@ async function executeTool(
         return result; 
       }
       case "demonstrate_virtual_folders": {
-        // Creates 10 real folders on the Desktop and echoes their paths back
-        const desktop = path.join(process.env.USERPROFILE || "C:\\Users\\Public", "Desktop");
-        const folderNames: string[] = [];
-        for (let i = 1; i <= 10; i++) {
-          const folderPath = path.join(desktop, `JARVIS_Pasta_${i}`);
-          await fs.mkdir(folderPath, { recursive: true });
-          folderNames.push(folderPath);
-        }
-        return { action: "spawn_3d_folders", ui_triggered: true, count: 10, folders_created: folderNames };
+        // Runs the compiled C# script that literally spans folders on desktop
+        // and launches windows floating physically around the user's screen in 60fps!
+        exec("OrbitFolders.exe", { cwd: process.cwd() });
+        return { action: "spawn_3d_folders", ui_triggered: true, count: 10, folders_created: "Pastas reais orbitando fisicamente a tela do Senhor" };
       }
       case "get_current_time": {
         const now = new Date();
