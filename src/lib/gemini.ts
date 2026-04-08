@@ -3,7 +3,7 @@ import { GoogleGenerativeAI, FunctionDeclaration, SchemaType, Tool } from "@goog
 // ── Client ────────────────────────────────────────────────────────────────────
 
 export const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || "");
-export const MODEL_NAME = "gemini-2.5-flash";
+export const MODEL_NAME = "gemini-1.5-flash";
 
 // ── System Prompt ─────────────────────────────────────────────────────────────
 

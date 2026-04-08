@@ -339,7 +339,7 @@ export default function FridayHUD() {
         </div>
 
         {/* Central Subtitles & Controls */}
-        <footer className="w-full flex flex-col items-center justify-end pb-12 gap-8 relative z-20 h-full">
+        <footer className="w-full flex flex-col items-center justify-end pb-8 gap-8 relative z-20 mt-auto">
             {/* Holographic Subtitles */}
             <AnimatePresence mode="wait">
                 {lastSpeech && (
