@@ -252,11 +252,11 @@ export default function FridayHUD() {
   const themeGlow = isFocusMode ? "rgba(255, 26, 26, 0.6)" : "rgba(0, 240, 255, 0.6)";
 
   return (
-    <div className="fixed inset-0 overflow-hidden bg-black font-mono text-xs selection:bg-cyan-500/30">
+    <div style={{ position: 'fixed', top: 0, left: 0, width: '100vw', height: '100vh', overflow: 'hidden', backgroundColor: 'black' }} className="font-mono text-xs selection:bg-cyan-500/30">
         
       {/* ── 3D Canvas Background (Takes explicitly exactly 100vh) ── */}
-      <div className="absolute inset-0 z-0 bg-transparent">
-        <Canvas camera={{ position: [0, 0, 10], fov: 75 }} dpr={[1, 2]} style={{ width: '100%', height: '100%' }}>
+      <div style={{ position: 'absolute', top: 0, left: 0, width: '100vw', height: '100vh', zIndex: 0 }} className="bg-transparent">
+        <Canvas camera={{ position: [0, 0, 10], fov: 75 }} dpr={[1, 2]} style={{ width: '100vw', height: '100vh', display: 'block' }}>
           <color attach="background" args={["#000000"]} />
           {/* Fog to hide extreme edges smoothly */}
           <fog attach="fog" args={["#000", 5, 25]} />
@@ -268,7 +268,7 @@ export default function FridayHUD() {
       </div>
 
       {/* ── HUD Overlay (Z-10) ── */}
-      <div className="absolute inset-0 z-10 pointer-events-none flex flex-col justify-between p-4 sm:p-10">
+      <div style={{ position: 'absolute', top: 0, left: 0, width: '100vw', height: '100vh', zIndex: 10, display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }} className="pointer-events-none p-4 sm:p-10">
         
         {/* Top Header - Pure floating hologram style */}
         <header className="flex justify-between items-start shrink-0">
