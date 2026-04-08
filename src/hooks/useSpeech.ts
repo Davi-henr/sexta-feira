@@ -97,6 +97,13 @@ export function useSpeech({ onTranscript, onError, lang = "pt-BR" }: UseSpeechOp
 
     recognition.onresult = (event) => {
       const transcript = event.results[0][0].transcript.trim();
+      
+      // Ignorar alucinações de ruído de fundo comuns na Web Speech API em português
+      const lower = transcript.toLowerCase().replace(/[^a-zê]/g, '');
+      if (lower === "silncio" || lower === "silencio" || lower === "") {
+        return;
+      }
+
       if (transcript) {
         setState("processing");
         onTranscript(transcript);
@@ -148,17 +155,19 @@ export function useSpeech({ onTranscript, onError, lang = "pt-BR" }: UseSpeechOp
       const utterance = new SpeechSynthesisUtterance(text);
       utterance.lang = lang;
       utterance.rate = 1.05;
-      utterance.pitch = 1.0;
+      utterance.pitch = 0.8; // Pitch um pouco mais grave, suave
       utterance.volume = 1.0;
 
-      // Prefer a natural-sounding voice
+      // Preferir voz masculina formal, "Google" ou "Microsoft Daniel"
       const voices = synthRef.current.getVoices();
       const preferred = voices.find(
         (v) =>
           v.lang.startsWith("pt") &&
-          (v.name.includes("Google") || v.name.includes("Microsoft"))
+          (v.name.includes("Daniel") || v.name.includes("Google") || v.name.includes("Microsoft"))
       );
-      if (preferred) utterance.voice = preferred;
+      if (preferred) {
+        utterance.voice = preferred;
+      }
 
       utterance.onstart = () => {
         isSpeakingRef.current = true;
