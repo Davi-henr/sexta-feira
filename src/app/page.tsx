@@ -261,49 +261,49 @@ export default function FridayHUD() {
   const themeGlow = isFocusMode ? "rgba(255, 26, 26, 0.6)" : "rgba(0, 240, 255, 0.6)";
 
   return (
-    <div className="relative w-screen h-screen overflow-hidden bg-black font-mono text-xs selection:bg-cyan-500/30">
+    <div className="fixed inset-0 overflow-hidden bg-black font-mono text-xs selection:bg-cyan-500/30 flex flex-col justify-between">
         
       {/* ── 3D Canvas Background ── */}
-      <div className="absolute inset-0 z-0" style={{ width: '100vw', height: '100vh', display: 'block' }}>
-        <Canvas camera={{ position: [0, 0, 10], fov: 75 }} gl={{ antialias: true, alpha: false, pixelRatio: typeof window !== 'undefined' ? Math.min(window.devicePixelRatio, 2) : 1 }} style={{ width: '100vw', height: '100vh' }}>
+      <div className="absolute inset-0 z-0">
+        <Canvas camera={{ position: [0, 0, 10], fov: 75 }} dpr={[1, 2]}>
           <color attach="background" args={["#000000"]} />
           <BackgroundAtoms isFocusMode={isFocusMode} />
           <ParticleSphere volume={speech.volume} isFocusMode={isFocusMode} isProcessing={isLoading || speech.state === "processing"} />
           <EffectComposer>
-            <Bloom luminanceThreshold={0.1} luminanceSmoothing={0.9} intensity={2.5} />
+            <Bloom luminanceThreshold={0.2} luminanceSmoothing={0.9} intensity={1.5} />
           </EffectComposer>
         </Canvas>
       </div>
 
       {/* ── HUD Overlay (Z-10) ── */}
-      <div className="absolute inset-0 z-10 pointer-events-none flex flex-col justify-between p-10">
+      <div className="relative z-10 pointer-events-none flex flex-col justify-between h-full p-4 sm:p-10">
         
         {/* Top Header - Pure floating hologram style */}
-        <header className="flex justify-between items-start">
+        <header className="flex justify-between items-start shrink-0">
             <div>
-                <h1 className="font-display text-5xl tracking-[0.3em] font-black uppercase" style={{ color: themeColor, textShadow: `0 0 20px ${themeColor}, 0 0 40px ${themeColor}88` }}>
+                <h1 className="font-display text-3xl sm:text-5xl tracking-[0.3em] font-black uppercase" style={{ color: themeColor, textShadow: `0 0 20px ${themeColor}, 0 0 40px ${themeColor}88` }}>
                     {isFocusMode ? "Sexta-Feira // Foco" : "Sexta-Feira"}
                 </h1>
-                <p className="tracking-widest opacity-80 mt-3 text-sm font-bold uppercase" style={{ color: themeColor, textShadow: `0 0 10px ${themeColor}` }}>
+                <p className="tracking-widest opacity-80 mt-3 text-xs sm:text-sm font-bold uppercase" style={{ color: themeColor, textShadow: `0 0 10px ${themeColor}` }}>
                     SYS_BUILD 3.1.0 · {conversationId ? `LINK:${conversationId.slice(0,8)}` : "OFFLINE_LINK"}
                 </p>
             </div>
             
             <div className="text-right">
-                <div className="flex items-center gap-3 justify-end text-sm">
+                <div className="flex items-center gap-3 justify-end text-xs sm:text-sm">
                     <div className="w-3 h-3 rounded-full animate-pulse" style={{ backgroundColor: themeColor, boxShadow: `0 0 15px ${themeColor}` }} />
-                    <span style={{ color: themeColor, textShadow: `0 0 10px ${themeColor}` }} className="font-bold tracking-[0.2em] uppercase">
+                    <span style={{ color: themeColor, textShadow: `0 0 10px ${themeColor}` }} className="font-bold tracking-[0.2em] uppercase hidden sm:inline">
                         SISTEMA ATIVO
                     </span>
                 </div>
-                <p className="opacity-90 mt-2 text-xl font-bold tracking-widest" style={{ color: themeColor, textShadow: `0 0 10px ${themeColor}` }}>
+                <p className="opacity-90 mt-2 text-lg sm:text-xl font-bold tracking-widest" style={{ color: themeColor, textShadow: `0 0 10px ${themeColor}` }}>
                     {timeStr || "00:00:00"}
                 </p>
             </div>
         </header>
 
         {/* Floating Holographic Panels Area */}
-        <div className="absolute top-1/4 left-10 w-80 space-y-8">
+        <div className="absolute top-1/4 left-4 sm:left-10 w-64 sm:w-80 space-y-8">
             <AnimatePresence>
                 {panels.map((panel) => (
                     <motion.div
@@ -324,7 +324,7 @@ export default function FridayHUD() {
                         <div className="bg-black/60 backdrop-blur-xl p-2 w-full h-full">
                             {panel.type === "image" && (
                                 // eslint-disable-next-line @next/next/no-img-element
-                                <img src={panel.url} alt="Holograma" className="w-full h-40 object-cover opacity-90 mix-blend-screen grayscale-[20%] contrast-125" />
+                                <img src={panel.url} alt="Holograma" className="w-full h-32 sm:h-40 object-cover opacity-90 mix-blend-screen grayscale-[20%] contrast-125" />
                             )}
                             {panel.type === "alert" && (
                                 <div className="text-center p-4">
@@ -339,7 +339,7 @@ export default function FridayHUD() {
         </div>
 
         {/* Central Subtitles & Controls */}
-        <footer className="w-full flex flex-col items-center justify-end pb-8 gap-8 relative z-20 mt-auto">
+        <footer className="w-full flex flex-col items-center justify-end pb-4 sm:pb-8 gap-4 sm:gap-8 relative z-20 shrink-0">
             {/* Holographic Subtitles */}
             <AnimatePresence mode="wait">
                 {lastSpeech && (
@@ -348,12 +348,12 @@ export default function FridayHUD() {
                         initial={{ opacity: 0, scale: 0.9, filter: "blur(10px)", y: 20 }}
                         animate={{ opacity: 1, scale: 1, filter: "blur(0px)", y: 0 }}
                         exit={{ opacity: 0, y: 20, filter: "blur(10px)" }}
-                        className="max-w-4xl text-center px-12 py-6 bg-transparent"
+                        className="max-w-xl sm:max-w-4xl text-center px-4 sm:px-12 py-2 sm:py-6 bg-transparent"
                     >
-                        <span className="uppercase tracking-[0.4em] font-black text-xs block mb-4" style={{ color: lastSpeech.role === "assistant" ? themeColor : "#fff", opacity: 0.9, textShadow: `0 0 15px ${lastSpeech.role === "assistant" ? themeColor : "#fff"}` }}>
+                        <span className="uppercase tracking-[0.4em] font-black text-[10px] sm:text-xs block mb-2 sm:mb-4" style={{ color: lastSpeech.role === "assistant" ? themeColor : "#fff", opacity: 0.9, textShadow: `0 0 15px ${lastSpeech.role === "assistant" ? themeColor : "#fff"}` }}>
                             {lastSpeech.role === "assistant" ? "SEXTA-FEIRA" : "SENHOR"}
                         </span>
-                        <p className="text-3xl font-body leading-relaxed font-bold tracking-widest drop-shadow-2xl" 
+                        <p className="text-xl sm:text-3xl font-body leading-relaxed font-bold tracking-widest drop-shadow-2xl" 
                            style={{ color: lastSpeech.role === "assistant" ? themeColor : "#ffffff", textShadow: `0 0 20px ${lastSpeech.role === "assistant" ? themeColor : "#ffffff"}, 0 0 40px ${themeGlow}` }}>
                             "{lastSpeech.text}"
                         </p>
@@ -364,7 +364,7 @@ export default function FridayHUD() {
             {/* Futuristic Mic Toggle */}
             <button
                 onClick={handleMicToggle}
-                className="pointer-events-auto px-16 py-4 uppercase tracking-[0.3em] font-black text-sm transition-all duration-300 relative overflow-hidden group"
+                className="pointer-events-auto px-8 sm:px-16 py-3 sm:py-4 uppercase tracking-[0.3em] font-black text-xs sm:text-sm transition-all duration-300 relative overflow-hidden group"
                 style={{
                     color: micEnabled ? "#000" : themeColor,
                     backgroundColor: micEnabled ? themeColor : "transparent",
