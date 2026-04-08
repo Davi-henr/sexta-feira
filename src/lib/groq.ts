@@ -3,7 +3,7 @@ import Groq from "groq-sdk";
 // ── Client ────────────────────────────────────────────────────────────────────
 
 export const groq = new Groq({ apiKey: process.env.GROQ_API_KEY || "" });
-export const MODEL_NAME = "llama3-groq-70b-8192-tool-use-preview"; 
+export const MODEL_NAME = "meta-llama/llama-4-scout-17b-16e-instruct";
 
 // ── System Prompt ─────────────────────────────────────────────────────────────
 
@@ -72,10 +72,10 @@ export const FRIDAY_TOOLS: Groq.Chat.Completions.ChatCompletionTool[] = [
     type: "function",
     function: {
       name: "web_search",
-      description: "Busca informações atuais na internet. Retorna resumos e URLs de imagens.",
+      description: "Busca informações atuais na internet. Retorna resumos, URLs e imagens.",
       parameters: {
         type: "object",
-        properties: { query: { type: "string" }, num_results: { type: "number" } },
+        properties: { query: { type: "string", description: "A query de busca." } },
         required: ["query"],
       },
     },
